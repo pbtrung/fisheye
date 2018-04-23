@@ -337,7 +337,7 @@ int main(int argc, char **argv) {
 
         ctr(argv[2], pwd_len, salt, SALT_LENGTH, &img_data[HEADER_LENGTH], num_pixels - HEADER_LENGTH);
 
-        uint64_t fsize = u8_to_u64((unsigned char *)&img_data[HEADER_LENGTH]);
+        uint64_t fsize = u8_to_u64(&img_data[HEADER_LENGTH]);
         FILE *fp = fopen(argv[8], "wb");
         if (fp == NULL) {
             abort_("[main] File %s could not be opened for writing", argv[8]);
