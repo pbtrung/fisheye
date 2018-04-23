@@ -143,7 +143,7 @@ void write_png(char *file_name, unsigned char *data, uint32_t width, uint32_t he
     if (setjmp(png_jmpbuf(png_ptr))) {
         abort_("[write_png] png_write_end failed");
     }
-    png_write_end(png_ptr, info_ptr);
+    png_write_end(png_ptr, NULL);
 
     png_destroy_write_struct(&png_ptr, &info_ptr);
     free(row_pointers);
