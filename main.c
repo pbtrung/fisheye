@@ -108,6 +108,10 @@ void write_png(char *file_name, unsigned char *data, uint32_t width, uint32_t he
         abort_("[write_png] png_create_info_struct failed");
     }
 
+    png_set_compression_level(png_ptr, 0);
+    png_set_compression_strategy(png_ptr, 0);
+    png_set_filter(png_ptr, 0, PNG_FILTER_NONE);
+    
     if (setjmp(png_jmpbuf(png_ptr))) {
         abort_("[write_png] png_init_io failed");
     }
