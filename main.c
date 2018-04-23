@@ -87,6 +87,8 @@ unsigned char *read_png(char *file_name, uint32_t *width, uint32_t *height) {
     png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
     fclose(fp);
     free(row_pointers);
+    row_pointers = NULL;
+
     return data;
 }
 
@@ -111,7 +113,7 @@ void write_png(char *file_name, unsigned char *data, uint32_t width, uint32_t he
     png_set_compression_level(png_ptr, 0);
     png_set_compression_strategy(png_ptr, 0);
     png_set_filter(png_ptr, 0, PNG_FILTER_NONE);
-    
+
     if (setjmp(png_jmpbuf(png_ptr))) {
         abort_("[write_png] png_init_io failed");
     }
@@ -147,6 +149,7 @@ void write_png(char *file_name, unsigned char *data, uint32_t width, uint32_t he
 
     png_destroy_write_struct(&png_ptr, &info_ptr);
     free(row_pointers);
+    row_pointers = NULL;
     fclose(fp);
 }
 
