@@ -2,13 +2,14 @@
 
 Compile:
 ```
-g++ main.cpp -O3 -o imgenc -lpng -lcryptopp -Wall -Wextra -Wpedantic
+g++ main.cpp -O3 -o fisheye -lpng -lcryptopp -Wall -Wextra -Wpedantic
+gcc main.c tf1024.c tf_fast.c -I. -O3 -o fisheye -lm -lsodium -lgcrypt -lpng -Wall -Wpedantic
 ```
 Encrypt:
 ```
-./imgenc -p "password" -h "HMAC key" -i test.png -o test.e.png -e
+./fisheye -p "password" -h "HMAC key" -i test.png -o test.e.png -e
 ```
 Decrypt:
 ```
-./imgenc -p "password" -h "HMAC key" -i test.e.png -o test.d.png -d
+./fisheye -p "password" -h "HMAC key" -i test.e.png -o test.d.png -d
 ```
