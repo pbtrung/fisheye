@@ -1,5 +1,11 @@
 # fisheye
 
+* Description: Turn an arbitrary file into a 8-bit grayscale encrypted PNG image
+* Encryption: Threefish 1024-bit key in CTR mode
+* Authentication: HMAC SHA3-512
+* Key derivation: 42 rounds of PBKDF2 SHA3-512
+* Dependencies: `libsodium`, `libgcrypt`, and `libpng`
+
 Compile:
 ```
 gcc main.c tf1024.c tf_fast.c -I. -O3 -o fisheye -lm -lsodium -lgcrypt -lpng -Wall -Wpedantic -Wextra
