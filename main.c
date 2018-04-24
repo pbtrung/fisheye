@@ -12,6 +12,7 @@
 #include <png.h>
 
 #include "tf1024.h"
+#include "lz4.h"
 
 void abort_(const char *s, ...) {
     va_list args;
@@ -160,6 +161,7 @@ void write_png(char *file_name, unsigned char *data, uint32_t width, uint32_t he
 #define HSALT_LENGTH 64U
 #define HMAC_LENGTH 64U
 #define FILE_LENGTH 8U
+#define COMPRESSED_LENGTH 8U
 #define HEADER_LENGTH (HMAC_LENGTH + SALT_LENGTH + HSALT_LENGTH)
 
 static inline void u64_to_u8(unsigned char out[8U], uint64_t x) {
@@ -280,20 +282,40 @@ int main(int argc, char **argv) {
         fseek(infile, 0, SEEK_END);
         uint64_t fsize = ftell(infile);
         fseek(infile, 0, SEEK_SET);
-
-        size_t img_side = ceil(sqrt(fsize + HEADER_LENGTH + FILE_LENGTH));
-        size_t num_pixels = img_side * img_side;
-        unsigned char *img_data = malloc(num_pixels);
-        if (img_data == NULL) {
+        unsigned char *raw_file = malloc(fsize);
+        if (raw_file == NULL) {
             abort_("[main] Unable to allocate memory");
         }
-        size_t nread = fread(&img_data[HEADER_LENGTH + FILE_LENGTH], fsize, 1, infile);
+        size_t nread = fread(raw_file, fsize, 1, infile);
         if (nread < fsize && ferror(infile)) {
             abort_("[main] Unable to read file");
         }
         fclose(infile);
 
+        size_t max_compressed_size = LZ4_compressBound(fsize);
+        unsigned char *compressed_buf = malloc(max_compressed_size);
+        if (compressed_buf == NULL) {
+            abort_("[main] Unable to allocate memory");
+        }
+        uint64_t compressed_size = LZ4_compress_default((char *)raw_file, (char *)compressed_buf, fsize, max_compressed_size);
+        if (compressed_size == 0) {
+            abort_("[main] Error: LZ4_compress_default");
+        }
+        free(raw_file);
+        raw_file = NULL;
+
+        size_t img_side = ceil(sqrt(HEADER_LENGTH + FILE_LENGTH + COMPRESSED_LENGTH + compressed_size));
+        size_t num_pixels = img_side * img_side;
+        unsigned char *img_data = malloc(num_pixels);
+        if (img_data == NULL) {
+            abort_("[main] Unable to allocate memory");
+        }
+        memcpy(&img_data[HEADER_LENGTH + FILE_LENGTH + COMPRESSED_LENGTH], compressed_buf, compressed_size);
+        free(compressed_buf);
+        compressed_buf = NULL;
+
         u64_to_u8(&img_data[HEADER_LENGTH], fsize);
+        u64_to_u8(&img_data[HEADER_LENGTH + FILE_LENGTH], compressed_size);
 
         unsigned char salt[SALT_LENGTH];
         randombytes_buf(salt, SALT_LENGTH);
@@ -345,15 +367,26 @@ int main(int argc, char **argv) {
         ctr(argv[2], pwd_len, salt, SALT_LENGTH, &img_data[HEADER_LENGTH], num_pixels - HEADER_LENGTH);
 
         uint64_t fsize = u8_to_u64(&img_data[HEADER_LENGTH]);
+        uint64_t compressed_size = u8_to_u64(&img_data[HEADER_LENGTH + FILE_LENGTH]);
+        unsigned char *decompressed_buf = malloc(fsize);
+        if (decompressed_buf == NULL) {
+            abort_("[main] Unable to allocate memory");
+        }
+        uint64_t decompressed_size = LZ4_decompress_safe((char *)&img_data[HEADER_LENGTH + FILE_LENGTH + COMPRESSED_LENGTH], (char *)decompressed_buf, compressed_size, fsize);
+        if (decompressed_size == 0 || decompressed_size != fsize) {
+            abort_("[main] Error: LZ4_decompress_safe");
+        }
+        free(img_data);
+
         FILE *fp = fopen(argv[8], "wb");
         if (fp == NULL) {
             abort_("[main] File %s could not be opened for writing", argv[8]);
         }
-        if (fwrite(&img_data[HEADER_LENGTH + FILE_LENGTH], fsize, 1, fp) < 1) {
+        if (fwrite(decompressed_buf, decompressed_size, 1, fp) < 1) {
             abort_("[main] Error: Unable to write to file");
         }
         fclose(fp);
-        free(img_data);
+        free(decompressed_buf);
 
     } else {
         abort_("[main] Wrong argv");
