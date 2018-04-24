@@ -8,7 +8,7 @@
 
 Compile:
 ```
-gcc main.c tf1024.c tf_fast.c -I. -O3 -o fisheye -lm -lsodium -lgcrypt -lpng -Wall -Wpedantic -Wextra
+gcc main.c tf1024.c tf_fast.c lz4.c -I. -O3 -o fisheye -lm -lsodium -lgcrypt -lpng -Wall -Wpedantic -Wextra
 ```
 Encrypt:
 ```
