@@ -32,18 +32,18 @@ unsigned char *read_png(char *file_name, uint32_t *width, uint32_t *height) {
     if (fread(header, 1, 8, fp) < 8) {
 	    abort_("[read_png] File %s could not be read", file_name);
 	}
-    if (png_sig_cmp(header, 0, 8)) {
+    if (png_sig_cmp(header, 0, 8) != 0) {
         abort_("[read_png] File %s is not a PNG image", file_name);
     }
 
     png_structp png_ptr;
     png_infop info_ptr;
     png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (!png_ptr) {
+    if (png_ptr == NULL) {
         abort_("[read_png] png_create_read_struct failed");
     }
     info_ptr = png_create_info_struct(png_ptr);
-    if (!info_ptr) {
+    if (info_ptr == NULL) {
         abort_("[read_png] png_create_info_struct failed");
     }
 
@@ -95,18 +95,18 @@ unsigned char *read_png(char *file_name, uint32_t *width, uint32_t *height) {
 void write_png(char *file_name, unsigned char *data, uint32_t width, uint32_t height) {
 
     FILE *fp = fopen(file_name, "wb");
-    if (!fp) {
+    if (fp == NULL) {
         abort_("[write_png] File %s could not be opened for writing", file_name);
     }
 
     png_structp png_ptr;
     png_infop info_ptr;
     png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (!png_ptr) {
+    if (png_ptr == NULL) {
         abort_("[write_png] png_create_write_struct failed");
     }
     info_ptr = png_create_info_struct(png_ptr);
-    if (!info_ptr) {
+    if (info_ptr == NULL) {
         abort_("[write_png] png_create_info_struct failed");
     }
 
@@ -198,19 +198,19 @@ static void compute_hmac(unsigned char *hmac_key, size_t hmac_key_len,
 
     gcry_mac_hd_t hd;
     gcry_error_t err = gcry_mac_open(&hd, GCRY_MAC_HMAC_SHA3_512, GCRY_MAC_FLAG_SECURE, NULL);
-    if (err) {
+    if (gcry_err_code(err) != GPG_ERR_NO_ERROR) {
         abort_("[compute_hmac] Error: gcry_mac_open");
     }
     err = gcry_mac_setkey(hd, hmac_key, hmac_key_len);
-    if (err) {
+    if (gcry_err_code(err) != GPG_ERR_NO_ERROR) {
         abort_("[compute_hmac] Error: gcry_mac_setkey");
     }
     err = gcry_mac_write(hd, msg, msg_len);
-    if (err) {
+    if (gcry_err_code(err) != GPG_ERR_NO_ERROR) {
         abort_("[compute_hmac] Error: gcry_mac_write");
     }
     err = gcry_mac_read(hd, hash, hash_len);
-    if (err) {
+    if (gcry_err_code(err) != GPG_ERR_NO_ERROR) {
         abort_("[compute_hmac] Error: gcry_mac_read");
     }
     if (*hash_len != HMAC_LENGTH) {
@@ -230,7 +230,7 @@ static void key_derive(char *pass, size_t pwd_len, unsigned char *salt,
 
     gcry_error_t err = gcry_kdf_derive(pass, pwd_len, GCRY_KDF_PBKDF2, GCRY_MD_SHA3_512, salt,
                         			   salt_len, 42, key_len, enc_key);
-    if (err) {
+    if (gcry_err_code(err) != GPG_ERR_NO_ERROR) {
         abort_("[key_derive] Error: gcry_kdf_derive");
     }
 }
