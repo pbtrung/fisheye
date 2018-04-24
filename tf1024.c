@@ -28,7 +28,7 @@ void tfc1024_done(tfc1024_ctx *ctx)
 void tfc1024_set_key(tfc1024_ctx *ctx, const void *key, size_t klen)
 {
 	TF_UNIT_TYPE parity = THREEFISH_PARITY;
-	int i;
+	size_t i;
 
 	if (klen > TF_KEY_SIZE) return;
 
