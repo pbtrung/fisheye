@@ -373,7 +373,7 @@ int main(int argc, char **argv) {
             abort_("[main] Unable to allocate memory");
         }
         uint64_t decompressed_size = LZ4_decompress_safe((char *)&img_data[HEADER_LENGTH + FILE_LENGTH + COMPRESSED_LENGTH], (char *)decompressed_buf, compressed_size, fsize);
-        if (decompressed_size == 0 || decompressed_size != fsize) {
+        if (decompressed_size <= 0 || decompressed_size != fsize) {
             abort_("[main] Error: LZ4_decompress_safe");
         }
         free(img_data);
