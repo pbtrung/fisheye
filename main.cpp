@@ -15,127 +15,141 @@
 #define PNG_DEBUG 3
 #include <png.h>
 
-uint32_t width, height;
-png_byte color_type;
-png_byte bit_depth;
+#include "lz4.h"
 
-static void error_exit(std::string msg, int exit_code) {
+static void error_exit(std::string msg) {
     std::cerr << msg << std::endl;
-    exit(exit_code);
+    exit(-1);
 }
 
-unsigned char *read_png(char *file_name) {
+unsigned char *read_png(char *file_name, uint32_t *width, uint32_t *height) {
 
     unsigned char header[8];
     FILE *fp = fopen(file_name, "rb");
-    if (!fp) {
-        error_exit("ERROR: [read_png] 1", 1);
+    if (fp == NULL) {
+        error_exit("[read_png] fopen");
     }
-    fread(header, 1, 8, fp);
-    if (png_sig_cmp(header, 0, 8)) {
-        error_exit("ERROR: [read_png] 2", 2);
+    if (fread(header, 1, 8, fp) < 8) {
+        error_exit("[read_png] fread");
+    }
+    if (png_sig_cmp(header, 0, 8) != 0) {
+        error_exit("[read_png] png_sig_cmp");
     }
 
     png_structp png_ptr;
     png_infop info_ptr;
     png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (!png_ptr) {
-        error_exit("ERROR: [read_png] 3", 3);
+    if (png_ptr == NULL) {
+        error_exit("[read_png] png_create_read_struct");
     }
     info_ptr = png_create_info_struct(png_ptr);
-    if (!info_ptr) {
-        error_exit("ERROR: [read_png] 4", 4);
+    if (info_ptr == NULL) {
+        error_exit("[read_png] png_create_info_struct");
     }
 
     if (setjmp(png_jmpbuf(png_ptr))) {
-        error_exit("ERROR: [read_png] 5", 5);
+        error_exit("[read_png] png_init_io");
     }
     png_init_io(png_ptr, fp);
     png_set_sig_bytes(png_ptr, 8);
 
     png_read_info(png_ptr, info_ptr);
-    width = png_get_image_width(png_ptr, info_ptr);
-    height = png_get_image_height(png_ptr, info_ptr);
-    color_type = png_get_color_type(png_ptr, info_ptr);
-    bit_depth = png_get_bit_depth(png_ptr, info_ptr);
-    if (bit_depth != 8 || color_type != PNG_COLOR_TYPE_GRAY || width != height) {
-        error_exit("ERROR: [read_png] 17", 17);
+    *width = png_get_image_width(png_ptr, info_ptr);
+    *height = png_get_image_height(png_ptr, info_ptr);
+    int color_type = png_get_color_type(png_ptr, info_ptr);
+    int bit_depth = png_get_bit_depth(png_ptr, info_ptr);
+    if (bit_depth != 8 || color_type != PNG_COLOR_TYPE_GRAY || *width != *height) {
+        error_exit("[read_png] File does not have needed format");
+    }
+
+    unsigned char *data = (unsigned char *)malloc(*width * *height);
+    if (data == NULL) {
+        error_exit("[read_png] Unable to allocate memory");
+    }
+    png_bytep *row_pointers = NULL;
+    row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * *height);
+    if (row_pointers == NULL) {
+        error_exit("[read_png] Unable to allocate memory");
+    }
+    for (uint32_t i = 0; i < *height; ++i) {
+        row_pointers[i] = data + i * *width;
     }
 
     if (setjmp(png_jmpbuf(png_ptr))) {
-        error_exit("ERROR: [read_png] 6", 6);
-    }
-    unsigned char *data = (unsigned char *)malloc(width * height);
-    if (data == NULL) {
-        error_exit("ERROR: [read_png] 6", 6);
-    }
-    png_bytep *row_pointers = NULL;
-    row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * height);
-    if (row_pointers == NULL) {
-        error_exit("ERROR: [read_png] 7", 7);
-    }
-    for (uint32_t i = 0; i < height; ++i) {
-        row_pointers[i] = data + i * width;
+        error_exit("[read_png] png_read_image");
     }
     png_read_image(png_ptr, row_pointers);
+    if (setjmp(png_jmpbuf(png_ptr))) {
+        error_exit("[read_png] png_read_end");
+    }
+    png_read_end(png_ptr, NULL);
 
-    fclose(fp);
     png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+    fclose(fp);
     free(row_pointers);
+    row_pointers = NULL;
+
     return data;
 }
 
-void write_png(char *file_name, unsigned char *data) {
+void write_png(char *file_name, unsigned char *data, uint32_t width, uint32_t height) {
 
     FILE *fp = fopen(file_name, "wb");
-    if (!fp) {
-        error_exit("ERROR: [write_png] 8", 8);
+    if (fp == NULL) {
+        error_exit("[write_png] fopen");
     }
 
     png_structp png_ptr;
     png_infop info_ptr;
     png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (!png_ptr) {
-        error_exit("ERROR: [write_png] 9", 9);
+    if (png_ptr == NULL) {
+        error_exit("[write_png] png_create_write_struct");
     }
     info_ptr = png_create_info_struct(png_ptr);
-    if (!info_ptr) {
-        error_exit("ERROR: [write_png] 10", 10);
+    if (info_ptr == NULL) {
+        error_exit("[write_png] png_create_info_struct");
     }
 
+    png_set_compression_level(png_ptr, 0);
+    png_set_compression_strategy(png_ptr, 0);
+    png_set_filter(png_ptr, 0, PNG_FILTER_NONE);
+
     if (setjmp(png_jmpbuf(png_ptr))) {
-        error_exit("ERROR: [write_png] 11", 11);
+        error_exit("[write_png] png_init_io");
     }
     png_init_io(png_ptr, fp);
 
     if (setjmp(png_jmpbuf(png_ptr))) {
-        error_exit("ERROR: [write_png] 12", 12);
+        error_exit("[write_png] png_write_info");
     }
+    int bit_depth = 8;
+    int color_type = PNG_COLOR_TYPE_GRAY;
     png_set_IHDR(png_ptr, info_ptr, width, height, bit_depth, color_type,
                  PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_BASE,
                  PNG_FILTER_TYPE_BASE);
     png_write_info(png_ptr, info_ptr);
 
-    if (setjmp(png_jmpbuf(png_ptr))) {
-        error_exit("ERROR: [write_png] 13", 13);
-    }
     png_bytep *row_pointers = NULL;
     row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * height);
     if (row_pointers == NULL) {
-        error_exit("ERROR: [write_png] 14", 14);
+        error_exit("[write_png] Unable to allocate memory");
     }
     for (uint32_t i = 0; i < height; ++i) {
         row_pointers[i] = data + i * width;
     }
-    png_write_image(png_ptr, row_pointers);
 
     if (setjmp(png_jmpbuf(png_ptr))) {
-        error_exit("ERROR: [write_png] 15", 15);
+        error_exit("[write_png] png_write_image");
     }
-    png_write_end(png_ptr, info_ptr);
+    png_write_image(png_ptr, row_pointers);
+    if (setjmp(png_jmpbuf(png_ptr))) {
+        error_exit("[write_png] png_write_end");
+    }
+    png_write_end(png_ptr, NULL);
 
     png_destroy_write_struct(&png_ptr, &info_ptr);
     free(row_pointers);
+    row_pointers = NULL;
     fclose(fp);
 }
 
@@ -165,16 +179,44 @@ static inline uint64_t u8_to_u64(const unsigned char in[8U]) {
     return x;
 }
 
-int main(int argc, char *argv[]) {
+const unsigned int KEY_LENGTH = 128;
+const unsigned int CTR_LENGTH = 128;
+const unsigned int TWEAK_LENGTH = 16;
+const unsigned int SALT_LENGTH = 64;
+const unsigned int HSALT_LENGTH = 64;
+const unsigned int HMAC_LENGTH = 64;
+const unsigned int FILE_LENGTH = 8;
+const unsigned int COMPRESSED_LENGTH = 8;
+const unsigned int ENC_KEY_LENGTH = KEY_LENGTH + CTR_LENGTH + TWEAK_LENGTH;
+const unsigned int HEADER_LENGTH = HMAC_LENGTH + SALT_LENGTH + HSALT_LENGTH;
 
-    const unsigned int KEY_LENGTH = 128;
-    const unsigned int CTR_LENGTH = 128;
-    const unsigned int TWEAK_LENGTH = 16;
-    const unsigned int SALT_LENGTH = 64;
-    const unsigned int HSALT_LENGTH = 64;
-    const unsigned int HMAC_LENGTH = 64;
-    const unsigned int FILE_LENGTH = 8;
-    const unsigned int HEADER_LENGTH = HMAC_LENGTH + SALT_LENGTH + HSALT_LENGTH;
+static void hmac(unsigned char *data, size_t data_len, char *hpwd, size_t hpwd_len, unsigned char *hsalt, size_t hsalt_len) {
+    CryptoPP::byte hkey[HMAC_LENGTH * 3];
+    CryptoPP::PKCS5_PBKDF2_HMAC<CryptoPP::SHA3_512> pbkdf2;
+    pbkdf2.DeriveKey(hkey, HMAC_LENGTH * 3, 0, (CryptoPP::byte *)hpwd, hpwd_len, hsalt, hsalt_len, 42);
+    
+    std::memcpy(data, &hkey[HMAC_LENGTH * 2], HMAC_LENGTH);
+    CryptoPP::HMAC<CryptoPP::SHA3_512> hmac(hkey, HMAC_LENGTH * 2);
+    hmac.Update(data, data_len);
+    CryptoPP::byte hmac_hash[HMAC_LENGTH];
+    hmac.Final(hmac_hash);
+    std::memcpy(data, hmac_hash, HMAC_LENGTH);
+}
+
+static void t3f_ctr(unsigned char *data, size_t data_len, char *pwd, size_t pwd_len, unsigned char *salt, size_t salt_len) {
+    CryptoPP::byte buf[ENC_KEY_LENGTH];
+    CryptoPP::PKCS5_PBKDF2_HMAC<CryptoPP::SHA3_512> pbkdf2;
+    pbkdf2.DeriveKey(buf, ENC_KEY_LENGTH, 0, (CryptoPP::byte *)pwd, pwd_len, salt, salt_len, 42);
+
+    CryptoPP::ConstByteArrayParameter tweak(&buf[KEY_LENGTH + CTR_LENGTH], TWEAK_LENGTH, false);
+    CryptoPP::AlgorithmParameters params = CryptoPP::MakeParameters(CryptoPP::Name::Tweak(), tweak);
+    CryptoPP::Threefish1024::Encryption t3f(buf, KEY_LENGTH);
+    t3f.SetTweak(params);
+    CryptoPP::CTR_Mode_ExternalCipher::Encryption encryptor(t3f, &buf[KEY_LENGTH]);
+    encryptor.ProcessData(data, data, data_len);
+}
+
+int main(int argc, char *argv[]) {
 
     if (argc == 10 && strcmp(argv[1], "-p") == 0 && strcmp(argv[3], "-h") == 0 && strcmp(argv[5], "-i") == 0 && strcmp(argv[7], "-o") == 0 && strcmp(argv[9], "-e") == 0) {
         size_t pwd_len = strlen(argv[2]);
@@ -185,11 +227,30 @@ int main(int argc, char *argv[]) {
         try {
             std::ifstream ifs(argv[6], std::ios::binary | std::ios::ate);
             uint64_t file_len = ifs.tellg();
-            uint32_t img_side = ceil(sqrt(file_len + HEADER_LENGTH + FILE_LENGTH));
-            width = height = img_side;
-            std::vector<char> img_body(img_side * img_side);
+            char *raw_file = (char *)malloc(file_len);
+            if (raw_file == NULL) {
+                error_exit("[main] Unable to allocate memory");
+            }
             ifs.seekg(0, std::ios::beg);
-            ifs.read(&img_body[HEADER_LENGTH + FILE_LENGTH], file_len);
+            ifs.read(raw_file, file_len);
+
+            size_t max_compressed_size = LZ4_compressBound(file_len);
+            unsigned char *compressed_buf = (unsigned char *)malloc(max_compressed_size);
+            if (compressed_buf == NULL) {
+                error_exit("[main] Unable to allocate memory");
+            }
+            uint64_t compressed_size = LZ4_compress_default(raw_file, (char *)compressed_buf, file_len, max_compressed_size);
+            if (compressed_size == 0) {
+                error_exit("[main] LZ4_compress_default");
+            }
+            free(raw_file);
+            raw_file = NULL;
+
+            uint32_t img_side = ceil(sqrt(HEADER_LENGTH + FILE_LENGTH + COMPRESSED_LENGTH + compressed_size));
+            std::vector<char> img_body(img_side * img_side);
+            std::memcpy(&img_body[HEADER_LENGTH + FILE_LENGTH + COMPRESSED_LENGTH], compressed_buf, compressed_size);
+            free(compressed_buf);
+            compressed_buf = NULL;
 
             unsigned char salt[SALT_LENGTH];
             CryptoPP::OS_GenerateRandomBlock(false, salt, SALT_LENGTH);
@@ -198,31 +259,12 @@ int main(int argc, char *argv[]) {
             CryptoPP::OS_GenerateRandomBlock(false, hsalt, HSALT_LENGTH);
             std::memcpy(&img_body[HMAC_LENGTH + SALT_LENGTH], hsalt, HSALT_LENGTH);
             u64_to_u8((unsigned char *)&img_body[HEADER_LENGTH], file_len);
+            u64_to_u8((unsigned char *)&img_body[HEADER_LENGTH + FILE_LENGTH], compressed_size);
 
-            const unsigned int buf_len = KEY_LENGTH + CTR_LENGTH + TWEAK_LENGTH;
-            CryptoPP::byte buf[buf_len];
-            CryptoPP::PKCS5_PBKDF2_HMAC<CryptoPP::SHA3_512> pbkdf2;
-            pbkdf2.DeriveKey(buf, buf_len, 0, (CryptoPP::byte *)argv[2], pwd_len, salt, SALT_LENGTH, 42);
+            t3f_ctr((unsigned char *)&img_body[HEADER_LENGTH], img_body.size() - HEADER_LENGTH, argv[2], pwd_len, salt, SALT_LENGTH);
+            hmac((CryptoPP::byte *)img_body.data(), img_body.size(), argv[4], hpwd_len, hsalt, HSALT_LENGTH);
 
-            CryptoPP::ConstByteArrayParameter tweak(&buf[KEY_LENGTH + CTR_LENGTH], TWEAK_LENGTH, false);
-            CryptoPP::AlgorithmParameters params = CryptoPP::MakeParameters(CryptoPP::Name::Tweak(), tweak);
-            CryptoPP::Threefish1024::Encryption t3f(buf, KEY_LENGTH);
-            t3f.SetTweak(params);
-            CryptoPP::CTR_Mode_ExternalCipher::Encryption encryptor(t3f, &buf[KEY_LENGTH]);
-            encryptor.ProcessData((CryptoPP::byte *)&img_body[HEADER_LENGTH], (CryptoPP::byte *)&img_body[HEADER_LENGTH], img_body.size() - HEADER_LENGTH);
-
-            CryptoPP::byte hkey[HMAC_LENGTH * 3];
-            pbkdf2.DeriveKey(hkey, HMAC_LENGTH * 3, 0, (CryptoPP::byte *)argv[4], hpwd_len, hsalt, HSALT_LENGTH, 42);
-            std::memcpy(img_body.data(), &hkey[HMAC_LENGTH * 2], HMAC_LENGTH);
-            CryptoPP::HMAC<CryptoPP::SHA3_512> hmac(hkey, HMAC_LENGTH * 2);
-            hmac.Update((CryptoPP::byte *)img_body.data(), img_body.size());
-            CryptoPP::byte hash[HMAC_LENGTH];
-            hmac.Final(hash);
-            std::memcpy(img_body.data(), hash, HMAC_LENGTH);
-
-            bit_depth = 8;
-            color_type = PNG_COLOR_TYPE_GRAY;
-            write_png(argv[8], (unsigned char *)img_body.data());
+            write_png(argv[8], (unsigned char *)img_body.data(), img_side, img_side);
 
         } catch (CryptoPP::Exception const& ex) {
             std::cerr << "CryptoPP::Exception caught: " << ex.what() << std::endl;
@@ -239,7 +281,8 @@ int main(int argc, char *argv[]) {
         assert(hpwd_len >= 5);
 
         try {
-            unsigned char *img_body = read_png(argv[6]);
+            uint32_t width, height;
+            unsigned char *img_body = read_png(argv[6], &width, &height);
             size_t num_pixels = width * height;
 
             unsigned char hash_from_img[HMAC_LENGTH];
@@ -247,15 +290,8 @@ int main(int argc, char *argv[]) {
             unsigned char hsalt[HSALT_LENGTH];
             std::memcpy(hsalt, &img_body[HMAC_LENGTH + SALT_LENGTH], HSALT_LENGTH);
 
-            CryptoPP::PKCS5_PBKDF2_HMAC<CryptoPP::SHA3_512> pbkdf2;
-            CryptoPP::byte hkey[HMAC_LENGTH * 3];
-            pbkdf2.DeriveKey(hkey, HMAC_LENGTH * 3, 0, (CryptoPP::byte *)argv[4], hpwd_len, hsalt, HSALT_LENGTH, 42);
-            std::memcpy(img_body, &hkey[HMAC_LENGTH * 2], HMAC_LENGTH);
-            CryptoPP::HMAC<CryptoPP::SHA3_512> hmac(hkey, HMAC_LENGTH * 2);
-            hmac.Update(img_body, num_pixels);
-            CryptoPP::byte hash[HMAC_LENGTH];
-            hmac.Final(hash);
-            if (std::memcmp(hash, hash_from_img, HMAC_LENGTH) != 0) {
+            hmac(img_body, num_pixels, argv[4], hpwd_len, hsalt, HSALT_LENGTH);
+            if (std::memcmp(img_body, hash_from_img, HMAC_LENGTH) != 0) {
                 std::cerr << "ERROR: HMAC" << std::endl;
                 std::cerr << "FILE : " << argv[6] << std::endl;
                 exit(-1);
@@ -264,23 +300,25 @@ int main(int argc, char *argv[]) {
             unsigned char salt[SALT_LENGTH];
             std::memcpy(salt, &img_body[HMAC_LENGTH], SALT_LENGTH);
 
-            const unsigned int buf_len = KEY_LENGTH + CTR_LENGTH + TWEAK_LENGTH;
-            CryptoPP::byte buf[buf_len];
-            pbkdf2.DeriveKey(buf, buf_len, 0, (CryptoPP::byte *)argv[2], pwd_len, salt, SALT_LENGTH, 42);
-
-            CryptoPP::ConstByteArrayParameter tweak(&buf[KEY_LENGTH + CTR_LENGTH], TWEAK_LENGTH, false);
-            CryptoPP::AlgorithmParameters params = CryptoPP::MakeParameters(CryptoPP::Name::Tweak(), tweak);
-            CryptoPP::Threefish1024::Encryption t3f(buf, KEY_LENGTH);
-            t3f.SetTweak(params);
-            CryptoPP::CTR_Mode_ExternalCipher::Encryption encryptor(t3f, &buf[KEY_LENGTH]);
-            encryptor.ProcessData(&img_body[HEADER_LENGTH], &img_body[HEADER_LENGTH], num_pixels - HEADER_LENGTH);
+            t3f_ctr(&img_body[HEADER_LENGTH], num_pixels - HEADER_LENGTH, argv[2], pwd_len, salt, SALT_LENGTH);
 
             uint64_t file_len = u8_to_u64(&img_body[HEADER_LENGTH]);
-            std::ofstream dec_image;
-            dec_image.open(argv[8]);
-            std::copy(&img_body[HEADER_LENGTH + FILE_LENGTH], &img_body[HEADER_LENGTH + FILE_LENGTH + file_len], std::ostream_iterator<char>(dec_image, ""));
-            dec_image.close();
+            uint64_t compressed_size = u8_to_u64(&img_body[HEADER_LENGTH + FILE_LENGTH]);
+            unsigned char *decompressed_buf = (unsigned char *)malloc(file_len);
+            if (decompressed_buf == NULL) {
+                error_exit("[main] Unable to allocate memory");
+            }
+            uint64_t decompressed_size = LZ4_decompress_safe((char *)&img_body[HEADER_LENGTH + FILE_LENGTH + COMPRESSED_LENGTH], (char *)decompressed_buf, compressed_size, file_len);
+            if (decompressed_size <= 0 || decompressed_size != file_len) {
+                error_exit("[main] LZ4_decompress_safe");
+            }
             free(img_body);
+
+            std::ofstream dec_file;
+            dec_file.open(argv[8]);
+            std::copy(decompressed_buf, decompressed_buf + decompressed_size, std::ostream_iterator<char>(dec_file, ""));
+            dec_file.close();
+            free(decompressed_buf);
 
         } catch (CryptoPP::Exception const& ex) {
             std::cerr << "CryptoPP::Exception caught: " << ex.what() << std::endl;
@@ -291,7 +329,7 @@ int main(int argc, char *argv[]) {
         }
 
     } else {
-        error_exit("ERROR: Wrong argv", -1);
+        error_exit("[main] Wrong argv");
     }
 
     return EXIT_SUCCESS;
