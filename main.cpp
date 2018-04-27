@@ -313,6 +313,7 @@ int main(int argc, char *argv[]) {
                 error_exit("[main] LZ4_decompress_safe");
             }
             free(img_body);
+            img_body = NULL;
 
             std::ofstream dec_file;
             dec_file.open(argv[8]);
