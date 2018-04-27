@@ -194,7 +194,7 @@ static void hmac(unsigned char *data, size_t data_len, char *hpwd, size_t hpwd_l
     CryptoPP::byte hkey[HMAC_LENGTH * 3];
     CryptoPP::PKCS5_PBKDF2_HMAC<CryptoPP::SHA3_512> pbkdf2;
     pbkdf2.DeriveKey(hkey, HMAC_LENGTH * 3, 0, (CryptoPP::byte *)hpwd, hpwd_len, hsalt, hsalt_len, 42);
-    
+
     std::memcpy(data, &hkey[HMAC_LENGTH * 2], HMAC_LENGTH);
     CryptoPP::HMAC<CryptoPP::SHA3_512> hmac(hkey, HMAC_LENGTH * 2);
     hmac.Update(data, data_len);
@@ -319,6 +319,7 @@ int main(int argc, char *argv[]) {
             std::copy(decompressed_buf, decompressed_buf + decompressed_size, std::ostream_iterator<char>(dec_file, ""));
             dec_file.close();
             free(decompressed_buf);
+            decompressed_buf = NULL;
 
         } catch (CryptoPP::Exception const& ex) {
             std::cerr << "CryptoPP::Exception caught: " << ex.what() << std::endl;
