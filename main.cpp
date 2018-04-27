@@ -315,10 +315,14 @@ int main(int argc, char *argv[]) {
             free(img_body);
             img_body = NULL;
 
-            std::ofstream dec_file;
-            dec_file.open(argv[8]);
-            std::copy(decompressed_buf, decompressed_buf + decompressed_size, std::ostream_iterator<char>(dec_file, ""));
-            dec_file.close();
+            FILE *fp = fopen(argv[8], "wb");
+            if (fp == NULL) {
+                error_exit("[main] fopen");
+            }
+            if (fwrite(decompressed_buf, decompressed_size, 1, fp) < 1) {
+                error_exit("[main] fwrite");
+            }
+            fclose(fp);
             free(decompressed_buf);
             decompressed_buf = NULL;
 
