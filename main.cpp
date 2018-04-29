@@ -3,7 +3,6 @@
 #include <cmath>
 
 #include <fstream>
-#include <iterator>
 #include <iostream>
 
 #include <cryptopp/modes.h>
