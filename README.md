@@ -7,6 +7,7 @@
 * Dependencies: 
 	- C version: `libsodium`, `libgcrypt`, and `libpng`
 	- C++ version: `crypto++` and `libpng`
+* The C++ version is faster and therefore recommended
 
 Compile:
 ```
