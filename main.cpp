@@ -201,7 +201,7 @@ const unsigned int HEADER_SIZE = 11;
 
 SecByteBlock read_key(char *keyf) {
     try {
-        SecByteBlock key(ENC_KEY_SIZE);
+        SecByteBlock key(ENC_KEY_SIZE + HASH_KEY_SIZE);
         FileSource fsource(keyf, false);
         fsource.Attach(new ArraySink(key, key.size()));
         fsource.Pump(key.size());
