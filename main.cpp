@@ -304,7 +304,6 @@ int main(int argc, char *argv[]) {
             hmac.Final(hmac_hash);
             if (hash_from_img != hmac_hash) {
                 std::cerr << "ERROR: HMAC" << std::endl;
-                std::cerr << "FILE : " << argv[7] << std::endl;
                 exit(-1);
             }
 
