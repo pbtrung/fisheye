@@ -105,13 +105,12 @@ int main(int argc, char *argv[]) {
         try {
             FileSource fsource(argv[5], false);
             size_t file_size = get_file_size(fsource);
-            size_t width = ceil(sqrt(HEADER_SIZE + SALT_SIZE + BLOCK_SIZE +
-                                     HASH_SIZE + file_size) /
-                                2);
+            size_t width =
+                ceil(sqrt(SALT_SIZE + BLOCK_SIZE + HASH_SIZE + file_size) / 2);
             const size_t read_size = BLOCK_SIZE * width;
 
             size_t num_header_rows =
-                div_up(HEADER_SIZE + SALT_SIZE + BLOCK_SIZE + HASH_SIZE, width);
+                div_up(SALT_SIZE + BLOCK_SIZE + HASH_SIZE, width);
             std::vector<unsigned char> buf(num_header_rows * width);
 
             size_t height = num_header_rows;
@@ -124,10 +123,10 @@ int main(int argc, char *argv[]) {
                 height += div_up(HASH_SIZE + remaining, width);
             }
 
-            std::memcpy(buf.data(), HEADER.data(), HEADER_SIZE);
             SecByteBlock salt(SALT_SIZE);
             OS_GenerateRandomBlock(false, salt, SALT_SIZE);
-            std::memcpy(&buf[HEADER_SIZE], salt, SALT_SIZE);
+            std::memcpy(buf.data(), salt, SALT_SIZE);
+            std::memcpy(&buf[SALT_SIZE], HEADER.data(), HEADER_SIZE);
             u64_to_u8(&buf[HEADER_SIZE + SALT_SIZE], file_size);
 
             SecByteBlock hkdf_hash(HKDF_SIZE);
@@ -143,24 +142,20 @@ int main(int argc, char *argv[]) {
             CBC_Mode_ExternalCipher::Encryption enc(t3f,
                                                     &hkdf_hash[ENC_KEY_SIZE]);
 
-            enc.ProcessData(&buf[HEADER_SIZE + SALT_SIZE],
-                            &buf[HEADER_SIZE + SALT_SIZE], BLOCK_SIZE);
+            enc.ProcessData(&buf[SALT_SIZE], &buf[SALT_SIZE], BLOCK_SIZE);
 
             SecByteBlock hmac_hash(HASH_SIZE);
             HMAC<SHA3_512> hmac;
             hmac.SetKey(&hkdf_hash[ENC_KEY_SIZE + IV_SIZE + TWEAK_SIZE],
                         HASH_KEY_SIZE);
-            hmac.Update(buf.data(), HEADER_SIZE + SALT_SIZE + BLOCK_SIZE);
+            hmac.Update(buf.data(), SALT_SIZE + BLOCK_SIZE);
             hmac.Final(hmac_hash);
-            std::memcpy(&buf[HEADER_SIZE + SALT_SIZE + BLOCK_SIZE], hmac_hash,
-                        HASH_SIZE);
+            std::memcpy(&buf[SALT_SIZE + BLOCK_SIZE], hmac_hash, HASH_SIZE);
 
-            if (buf.size() > HEADER_SIZE + SALT_SIZE + BLOCK_SIZE + HASH_SIZE) {
+            if (buf.size() > SALT_SIZE + BLOCK_SIZE + HASH_SIZE) {
                 OS_GenerateRandomBlock(
-                    false,
-                    &buf[HEADER_SIZE + SALT_SIZE + BLOCK_SIZE + HASH_SIZE],
-                    buf.size() -
-                        (HEADER_SIZE + SALT_SIZE + BLOCK_SIZE + HASH_SIZE));
+                    false, &buf[SALT_SIZE + BLOCK_SIZE + HASH_SIZE],
+                    buf.size() - (SALT_SIZE + BLOCK_SIZE + HASH_SIZE));
             }
 
             wimg_info wpng_info;
@@ -253,8 +248,7 @@ int main(int argc, char *argv[]) {
             }
 
             size_t num_header_rows =
-                div_up(HEADER_SIZE + SALT_SIZE + BLOCK_SIZE + HASH_SIZE,
-                       rpng_info.width);
+                div_up(SALT_SIZE + BLOCK_SIZE + HASH_SIZE, rpng_info.width);
             std::vector<unsigned char> buf(num_header_rows * rpng_info.width);
 
             for (uint32_t i = 0; i < num_header_rows; ++i) {
@@ -263,10 +257,9 @@ int main(int argc, char *argv[]) {
             rpng_decode_rows(&rpng_info, num_header_rows);
 
             SecByteBlock hash_from_img(HASH_SIZE);
-            std::memcpy(hash_from_img,
-                        &buf[HEADER_SIZE + SALT_SIZE + BLOCK_SIZE], HASH_SIZE);
+            std::memcpy(hash_from_img, &buf[SALT_SIZE + BLOCK_SIZE], HASH_SIZE);
             SecByteBlock salt(SALT_SIZE);
-            std::memcpy(salt, &buf[HEADER_SIZE], SALT_SIZE);
+            std::memcpy(salt, buf.data(), SALT_SIZE);
 
             SecByteBlock hkdf_hash(HKDF_SIZE);
             HKDF<SHA3_512> hkdf;
@@ -277,7 +270,7 @@ int main(int argc, char *argv[]) {
             HMAC<SHA3_512> hmac;
             hmac.SetKey(&hkdf_hash[ENC_KEY_SIZE + IV_SIZE + TWEAK_SIZE],
                         HASH_KEY_SIZE);
-            hmac.Update(buf.data(), HEADER_SIZE + SALT_SIZE + BLOCK_SIZE);
+            hmac.Update(buf.data(), SALT_SIZE + BLOCK_SIZE);
             hmac.Final(hmac_hash);
             if (hash_from_img != hmac_hash) {
                 error_exit("[main] Wrong HMAC");
@@ -291,8 +284,11 @@ int main(int argc, char *argv[]) {
             CBC_Mode_ExternalCipher::Decryption dec(t3f,
                                                     &hkdf_hash[ENC_KEY_SIZE]);
 
-            dec.ProcessData(&buf[HEADER_SIZE + SALT_SIZE],
-                            &buf[HEADER_SIZE + SALT_SIZE], BLOCK_SIZE);
+            dec.ProcessData(&buf[SALT_SIZE], &buf[SALT_SIZE], BLOCK_SIZE);
+            std::string h(&buf[SALT_SIZE], &buf[SALT_SIZE] + HEADER_SIZE);
+            if (h != HEADER) {
+                error_exit("[main] HEADER");
+            }
 
             uint64_t file_size = u8_to_u64(&buf[HEADER_SIZE + SALT_SIZE]);
 
