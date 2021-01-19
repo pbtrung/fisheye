@@ -107,10 +107,8 @@ int main(int argc, char *argv[]) {
         try {
             FileSource fsource(argv[5], false);
             size_t file_size = get_file_size(fsource);
-            size_t width = STDMIN(
-                (int)ceil(sqrt(SALT_SIZE + BLOCK_SIZE + HASH_SIZE + file_size) /
-                          2),
-                1024);
+            size_t width =
+                ceil(sqrt(SALT_SIZE + BLOCK_SIZE + HASH_SIZE + file_size) / 2);
             const size_t read_size = BLOCK_SIZE * width;
 
             size_t num_header_rows =
