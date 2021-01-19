@@ -66,8 +66,6 @@ const unsigned int BLOCK_SIZE = 128;
 const unsigned int FILE_SIZE = 8;
 const unsigned int HKDF_SIZE =
     ENC_KEY_SIZE + IV_SIZE + TWEAK_SIZE + HASH_KEY_SIZE;
-const std::string HEADER = "t3fcrypt001";
-const unsigned int HEADER_SIZE = 11;
 
 SecByteBlock read_key(char *keyf) {
     try {
@@ -126,8 +124,7 @@ int main(int argc, char *argv[]) {
             SecByteBlock salt(SALT_SIZE);
             OS_GenerateRandomBlock(false, salt, SALT_SIZE);
             std::memcpy(buf.data(), salt, SALT_SIZE);
-            std::memcpy(&buf[SALT_SIZE], HEADER.data(), HEADER_SIZE);
-            u64_to_u8(&buf[HEADER_SIZE + SALT_SIZE], file_size);
+            u64_to_u8(&buf[SALT_SIZE], file_size);
 
             SecByteBlock hkdf_hash(HKDF_SIZE);
             HKDF<SHA3_512> hkdf;
@@ -285,12 +282,7 @@ int main(int argc, char *argv[]) {
                                                     &hkdf_hash[ENC_KEY_SIZE]);
 
             dec.ProcessData(&buf[SALT_SIZE], &buf[SALT_SIZE], BLOCK_SIZE);
-            std::string h(&buf[SALT_SIZE], &buf[SALT_SIZE] + HEADER_SIZE);
-            if (h != HEADER) {
-                error_exit("[main] HEADER");
-            }
-
-            uint64_t file_size = u8_to_u64(&buf[HEADER_SIZE + SALT_SIZE]);
+            uint64_t file_size = u8_to_u64(&buf[SALT_SIZE]);
 
             size_t remaining = file_size;
             buf.resize(num_rows * rpng_info.width);
