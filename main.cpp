@@ -6,145 +6,12 @@
 #include <cryptopp/threefish.h>
 using namespace CryptoPP;
 
-#define PNG_DEBUG 3
-#include <png.h>
+#include "rpng.h"
+#include "wpng.h"
 
 static void error_exit(std::string msg) {
     std::cerr << msg << std::endl;
     exit(-1);
-}
-
-unsigned char *read_png(char *file_name, uint32_t *width, uint32_t *height) {
-
-    unsigned char header[8];
-    FILE *fp = fopen(file_name, "rb");
-    if (fp == NULL) {
-        error_exit("[read_png] fopen");
-    }
-    if (fread(header, 1, 8, fp) < 8) {
-        error_exit("[read_png] fread");
-    }
-    if (png_sig_cmp(header, 0, 8) != 0) {
-        error_exit("[read_png] png_sig_cmp");
-    }
-
-    png_structp png_ptr;
-    png_infop info_ptr;
-    png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (png_ptr == NULL) {
-        error_exit("[read_png] png_create_read_struct");
-    }
-    info_ptr = png_create_info_struct(png_ptr);
-    if (info_ptr == NULL) {
-        error_exit("[read_png] png_create_info_struct");
-    }
-
-    if (setjmp(png_jmpbuf(png_ptr))) {
-        error_exit("[read_png] png_init_io");
-    }
-    png_init_io(png_ptr, fp);
-    png_set_sig_bytes(png_ptr, 8);
-
-    png_read_info(png_ptr, info_ptr);
-    *width = png_get_image_width(png_ptr, info_ptr);
-    *height = png_get_image_height(png_ptr, info_ptr);
-    int color_type = png_get_color_type(png_ptr, info_ptr);
-    int bit_depth = png_get_bit_depth(png_ptr, info_ptr);
-    if (bit_depth != 8 || color_type != PNG_COLOR_TYPE_GRAY ||
-        *width != *height) {
-        error_exit("[read_png] File does not have needed format");
-    }
-
-    unsigned char *data = (unsigned char *)malloc(*width * *height);
-    if (data == NULL) {
-        error_exit("[read_png] Unable to allocate memory");
-    }
-    png_bytep *row_pointers = NULL;
-    row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * *height);
-    if (row_pointers == NULL) {
-        error_exit("[read_png] Unable to allocate memory");
-    }
-    for (uint32_t i = 0; i < *height; ++i) {
-        row_pointers[i] = data + i * *width;
-    }
-
-    if (setjmp(png_jmpbuf(png_ptr))) {
-        error_exit("[read_png] png_read_image");
-    }
-    png_read_image(png_ptr, row_pointers);
-    if (setjmp(png_jmpbuf(png_ptr))) {
-        error_exit("[read_png] png_read_end");
-    }
-    png_read_end(png_ptr, NULL);
-
-    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-    fclose(fp);
-    free(row_pointers);
-    row_pointers = NULL;
-
-    return data;
-}
-
-void write_png(char *file_name, unsigned char *data, uint32_t width,
-               uint32_t height) {
-
-    FILE *fp = fopen(file_name, "wb");
-    if (fp == NULL) {
-        error_exit("[write_png] fopen");
-    }
-
-    png_structp png_ptr;
-    png_infop info_ptr;
-    png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (png_ptr == NULL) {
-        error_exit("[write_png] png_create_write_struct");
-    }
-    info_ptr = png_create_info_struct(png_ptr);
-    if (info_ptr == NULL) {
-        error_exit("[write_png] png_create_info_struct");
-    }
-
-    png_set_compression_level(png_ptr, 0);
-    png_set_compression_strategy(png_ptr, 0);
-    png_set_filter(png_ptr, 0, PNG_FILTER_NONE);
-
-    if (setjmp(png_jmpbuf(png_ptr))) {
-        error_exit("[write_png] png_init_io");
-    }
-    png_init_io(png_ptr, fp);
-
-    if (setjmp(png_jmpbuf(png_ptr))) {
-        error_exit("[write_png] png_write_info");
-    }
-    int bit_depth = 8;
-    int color_type = PNG_COLOR_TYPE_GRAY;
-    png_set_IHDR(png_ptr, info_ptr, width, height, bit_depth, color_type,
-                 PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_BASE,
-                 PNG_FILTER_TYPE_BASE);
-    png_write_info(png_ptr, info_ptr);
-
-    png_bytep *row_pointers = NULL;
-    row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * height);
-    if (row_pointers == NULL) {
-        error_exit("[write_png] Unable to allocate memory");
-    }
-    for (uint32_t i = 0; i < height; ++i) {
-        row_pointers[i] = data + i * width;
-    }
-
-    if (setjmp(png_jmpbuf(png_ptr))) {
-        error_exit("[write_png] png_write_image");
-    }
-    png_write_image(png_ptr, row_pointers);
-    if (setjmp(png_jmpbuf(png_ptr))) {
-        error_exit("[write_png] png_write_end");
-    }
-    png_write_end(png_ptr, NULL);
-
-    png_destroy_write_struct(&png_ptr, &info_ptr);
-    free(row_pointers);
-    row_pointers = NULL;
-    fclose(fp);
 }
 
 static inline void u64_to_u8(unsigned char out[8U], uint64_t x) {
@@ -193,6 +60,7 @@ const unsigned int HASH_SIZE = 64;
 const unsigned int SALT_SIZE = 64;
 const unsigned int IV_SIZE = 128;
 const unsigned int ENC_KEY_SIZE = 128;
+const unsigned int BLOCK_SIZE = 128;
 const unsigned int FILE_SIZE = 8;
 const unsigned int HKDF_SIZE =
     ENC_KEY_SIZE + IV_SIZE + TWEAK_SIZE + HASH_KEY_SIZE;
@@ -208,9 +76,21 @@ SecByteBlock read_key(char *keyf) {
         return key;
     } catch (const Exception &ex) {
         std::cerr << ex.what() << std::endl;
-        exit(-2);
+        exit(-1);
     }
 }
+
+size_t get_file_size(const FileSource &file) {
+    std::istream *stream = const_cast<FileSource &>(file).GetStream();
+
+    std::ifstream::pos_type old = stream->tellg();
+    std::ifstream::pos_type end = stream->seekg(0, std::ios_base::end).tellg();
+    stream->seekg(old);
+
+    return static_cast<size_t>(end);
+}
+
+inline size_t div_up(size_t x, size_t y) { return x / y + !!(x % y); }
 
 int main(int argc, char *argv[]) {
 
@@ -219,26 +99,32 @@ int main(int argc, char *argv[]) {
         SecByteBlock key = read_key(argv[2]);
 
         try {
-            std::ifstream ifs(argv[5], std::ios::binary | std::ios::ate);
-            uint64_t file_len = ifs.tellg();
+            FileSource fsource(argv[5], false);
+            size_t file_size = get_file_size(fsource);
+            size_t width = ceil(sqrt(HEADER_SIZE + SALT_SIZE + BLOCK_SIZE +
+                                     HASH_SIZE + file_size) /
+                                2);
+            const size_t read_size = BLOCK_SIZE * width;
 
-            uint32_t img_side = ceil(sqrt(HEADER_SIZE + SALT_SIZE + HASH_SIZE +
-                                          FILE_SIZE + file_len));
-            std::vector<unsigned char> img(img_side * img_side);
+            size_t num_header_rows =
+                div_up(HEADER_SIZE + SALT_SIZE + BLOCK_SIZE + HASH_SIZE, width);
+            std::vector<unsigned char> buf(num_header_rows * width);
 
-            ifs.seekg(0, std::ios::beg);
-            ifs.read(
-                (char *)&img[HEADER_SIZE + SALT_SIZE + HASH_SIZE + FILE_SIZE],
-                file_len);
-            ifs.close();
+            size_t height = num_header_rows;
+            size_t remaining = file_size;
+            while (remaining >= read_size) {
+                height += div_up(HASH_SIZE + read_size, width);
+                remaining -= read_size;
+            }
+            if (remaining != 0) {
+                height += div_up(HASH_SIZE + remaining, width);
+            }
 
-            std::memcpy(img.data(), HEADER.data(), HEADER_SIZE);
+            std::memcpy(buf.data(), HEADER.data(), HEADER_SIZE);
             SecByteBlock salt(SALT_SIZE);
             OS_GenerateRandomBlock(false, salt, SALT_SIZE);
-            std::memcpy(&img[HEADER_SIZE], salt, SALT_SIZE);
-            u64_to_u8(
-                (unsigned char *)&img[HEADER_SIZE + SALT_SIZE + HASH_SIZE],
-                file_len);
+            std::memcpy(&buf[HEADER_SIZE], salt, SALT_SIZE);
+            u64_to_u8(&buf[HEADER_SIZE + SALT_SIZE], file_size);
 
             SecByteBlock hkdf_hash(HKDF_SIZE);
             HKDF<SHA3_512> hkdf;
@@ -250,28 +136,87 @@ int main(int argc, char *argv[]) {
             AlgorithmParameters params = MakeParameters(Name::Tweak(), twk);
             Threefish1024::Encryption t3f(&hkdf_hash[0], ENC_KEY_SIZE);
             t3f.SetTweak(params);
-            CBC_CTS_Mode_ExternalCipher::Encryption enc(
-                t3f, &hkdf_hash[ENC_KEY_SIZE]);
-            size_t s = img.size() - (HEADER_SIZE + SALT_SIZE + HASH_SIZE);
-            ArraySink as(&img[HEADER_SIZE + SALT_SIZE + HASH_SIZE], s);
-            ArraySource(
-                &img[HEADER_SIZE + SALT_SIZE + HASH_SIZE], s, true,
-                new StreamTransformationFilter(enc, new Redirector(as)));
+            CBC_Mode_ExternalCipher::Encryption enc(t3f,
+                                                    &hkdf_hash[ENC_KEY_SIZE]);
+
+            enc.ProcessData(&buf[HEADER_SIZE + SALT_SIZE],
+                            &buf[HEADER_SIZE + SALT_SIZE], BLOCK_SIZE);
 
             SecByteBlock hmac_hash(HASH_SIZE);
             HMAC<SHA3_512> hmac;
             hmac.SetKey(&hkdf_hash[ENC_KEY_SIZE + IV_SIZE + TWEAK_SIZE],
                         HASH_KEY_SIZE);
-            std::memset(&img[HEADER_SIZE + SALT_SIZE], 0, HASH_SIZE);
-            hmac.Update(img.data(), img.size());
+            hmac.Update(buf.data(), HEADER_SIZE + SALT_SIZE + BLOCK_SIZE);
             hmac.Final(hmac_hash);
-            std::memcpy(&img[HEADER_SIZE + SALT_SIZE], hmac_hash, HASH_SIZE);
+            std::memcpy(&buf[HEADER_SIZE + SALT_SIZE + BLOCK_SIZE], hmac_hash,
+                        HASH_SIZE);
 
-            write_png(argv[7], (unsigned char *)img.data(), img_side, img_side);
+            if (buf.size() > HEADER_SIZE + SALT_SIZE + BLOCK_SIZE + HASH_SIZE) {
+                OS_GenerateRandomBlock(
+                    false,
+                    &buf[HEADER_SIZE + SALT_SIZE + BLOCK_SIZE + HASH_SIZE],
+                    buf.size() -
+                        (HEADER_SIZE + SALT_SIZE + BLOCK_SIZE + HASH_SIZE));
+            }
+
+            wimg_info wpng_info;
+            wpng_info.outfile = NULL;
+            wpng_info.row_pointers = NULL;
+            if (!(wpng_info.outfile = fopen(argv[7], "wb"))) {
+                error_exit("[main] fopen");
+            }
+            wpng_info.width = width;
+            wpng_info.height = height;
+            wpng_init(&wpng_info);
+
+            size_t num_rows = div_up(read_size + HASH_SIZE, width);
+            wpng_info.row_pointers =
+                (unsigned char **)malloc(sizeof(unsigned char *) * num_rows);
+            if (wpng_info.row_pointers == NULL) {
+                error_exit("[main] malloc row_pointers");
+            }
+
+            for (uint32_t i = 0; i < num_header_rows; ++i) {
+                wpng_info.row_pointers[i] = buf.data() + i * width;
+            }
+            wpng_encode_rows(&wpng_info, num_header_rows);
+
+            remaining = file_size;
+            buf.resize(num_rows * width);
+            for (uint32_t i = 0; i < num_rows; ++i) {
+                wpng_info.row_pointers[i] = buf.data() + i * width;
+            }
+
+            while (remaining && !fsource.SourceExhausted()) {
+                size_t req = STDMIN(remaining, read_size);
+                remaining -= req;
+
+                ArraySink as(buf.data(), req);
+                fsource.Detach(new Redirector(as));
+
+                fsource.Pump(req);
+                req = BLOCK_SIZE * div_up(req, BLOCK_SIZE);
+                enc.ProcessData(buf.data(), buf.data(), req);
+
+                hmac.Update(buf.data(), req);
+                hmac.Final(hmac_hash);
+
+                size_t num_rows_w = div_up(req + HASH_SIZE, width);
+                std::memcpy(&buf[req], hmac_hash, HASH_SIZE);
+                if (num_rows_w * width > req + HASH_SIZE) {
+                    OS_GenerateRandomBlock(false, &buf[req + HASH_SIZE],
+                                           num_rows_w * width -
+                                               (req + HASH_SIZE));
+                }
+                wpng_encode_rows(&wpng_info, num_rows_w);
+            }
+
+            wpng_encode_finish(&wpng_info);
+            wpng_cleanup(&wpng_info);
 
         } catch (const Exception &ex) {
             std::cerr << ex.what() << std::endl;
-            exit(-3);
+            exit(-1);
         }
 
     } else if (argc == 8 && strcmp(argv[1], "-k") == 0 &&
@@ -280,31 +225,51 @@ int main(int argc, char *argv[]) {
         SecByteBlock key = read_key(argv[2]);
 
         try {
-            uint32_t width, height;
-            unsigned char *img = read_png(argv[5], &width, &height);
-            size_t num_pixels = width * height;
+            rimg_info rpng_info;
+            rpng_info.infile = NULL;
+            rpng_info.row_pointers = NULL;
+            if (!(rpng_info.infile = fopen(argv[5], "rb"))) {
+                error_exit("[main] fopen");
+            }
+            rpng_init(&rpng_info);
+
+            const size_t read_size = BLOCK_SIZE * rpng_info.width;
+            size_t num_rows = div_up(read_size + HASH_SIZE, rpng_info.width);
+            rpng_info.row_pointers =
+                (unsigned char **)malloc(sizeof(unsigned char *) * num_rows);
+            if (rpng_info.row_pointers == NULL) {
+                error_exit("[main] malloc row_pointers");
+            }
+
+            size_t num_header_rows =
+                div_up(HEADER_SIZE + SALT_SIZE + BLOCK_SIZE + HASH_SIZE,
+                       rpng_info.width);
+            std::vector<unsigned char> buf(num_header_rows * rpng_info.width);
+
+            for (uint32_t i = 0; i < num_header_rows; ++i) {
+                rpng_info.row_pointers[i] = buf.data() + i * rpng_info.width;
+            }
+            rpng_decode_rows(&rpng_info, num_header_rows);
 
             SecByteBlock hash_from_img(HASH_SIZE);
-            std::memcpy(hash_from_img, &img[HEADER_SIZE + SALT_SIZE],
-                        HASH_SIZE);
+            std::memcpy(hash_from_img,
+                        &buf[HEADER_SIZE + SALT_SIZE + BLOCK_SIZE], HASH_SIZE);
             SecByteBlock salt(SALT_SIZE);
-            std::memcpy(salt, &img[HEADER_SIZE], SALT_SIZE);
+            std::memcpy(salt, &buf[HEADER_SIZE], SALT_SIZE);
 
             SecByteBlock hkdf_hash(HKDF_SIZE);
             HKDF<SHA3_512> hkdf;
             hkdf.DeriveKey(hkdf_hash, hkdf_hash.size(), key, key.size(), salt,
                            salt.size(), NULL, 0);
 
+            SecByteBlock hmac_hash(HASH_SIZE);
             HMAC<SHA3_512> hmac;
             hmac.SetKey(&hkdf_hash[ENC_KEY_SIZE + IV_SIZE + TWEAK_SIZE],
                         HASH_KEY_SIZE);
-            SecByteBlock hmac_hash(HASH_SIZE);
-            std::memset(&img[HEADER_SIZE + SALT_SIZE], 0, HASH_SIZE);
-            hmac.Update(img, num_pixels);
+            hmac.Update(buf.data(), HEADER_SIZE + SALT_SIZE + BLOCK_SIZE);
             hmac.Final(hmac_hash);
             if (hash_from_img != hmac_hash) {
-                std::cerr << "ERROR: HMAC" << std::endl;
-                exit(-1);
+                error_exit("[main] Wrong HMAC");
             }
 
             ConstByteArrayParameter twk(&hkdf_hash[ENC_KEY_SIZE + IV_SIZE],
@@ -312,35 +277,60 @@ int main(int argc, char *argv[]) {
             AlgorithmParameters params = MakeParameters(Name::Tweak(), twk);
             Threefish1024::Decryption t3f(&hkdf_hash[0], ENC_KEY_SIZE);
             t3f.SetTweak(params);
-            CBC_CTS_Mode_ExternalCipher::Decryption dec(
-                t3f, &hkdf_hash[ENC_KEY_SIZE]);
-            size_t s = num_pixels - (HEADER_SIZE + SALT_SIZE + HASH_SIZE);
-            ArraySink as(&img[HEADER_SIZE + SALT_SIZE + HASH_SIZE], s);
-            ArraySource(
-                &img[HEADER_SIZE + SALT_SIZE + HASH_SIZE], s, true,
-                new StreamTransformationFilter(dec, new Redirector(as)));
+            CBC_Mode_ExternalCipher::Decryption dec(t3f,
+                                                    &hkdf_hash[ENC_KEY_SIZE]);
 
-            uint64_t file_len =
-                u8_to_u64(&img[HEADER_SIZE + SALT_SIZE + HASH_SIZE]);
+            dec.ProcessData(&buf[HEADER_SIZE + SALT_SIZE],
+                            &buf[HEADER_SIZE + SALT_SIZE], BLOCK_SIZE);
+
+            uint64_t file_size = u8_to_u64(&buf[HEADER_SIZE + SALT_SIZE]);
+
+            size_t remaining = file_size;
+            buf.resize(num_rows * rpng_info.width);
+            for (uint32_t i = 0; i < num_rows; ++i) {
+                rpng_info.row_pointers[i] = buf.data() + i * rpng_info.width;
+            }
 
             FILE *fp = fopen(argv[7], "wb");
             if (fp == NULL) {
                 error_exit("[main] fopen");
             }
-            if (fwrite(&img[HEADER_SIZE + SALT_SIZE + HASH_SIZE + FILE_SIZE],
-                       file_len, 1, fp) < 1) {
-                error_exit("[main] fwrite");
+
+            while (remaining > 0) {
+                size_t req = STDMIN(remaining, read_size);
+                remaining -= req;
+                size_t write_size = req;
+                req = BLOCK_SIZE * div_up(req, BLOCK_SIZE);
+
+                size_t num_rows_w = div_up(req + HASH_SIZE, rpng_info.width);
+                rpng_decode_rows(&rpng_info, num_rows_w);
+
+                hmac.Update(buf.data(), req);
+                hmac.Final(hmac_hash);
+
+                SecByteBlock hash_from_img_w(HASH_SIZE);
+                std::memcpy(hash_from_img_w, &buf[req], HASH_SIZE);
+                if (hash_from_img_w != hmac_hash) {
+                    error_exit("[main] Wrong HMAC");
+                }
+
+                dec.ProcessData(buf.data(), buf.data(), req);
+                if (fwrite(buf.data(), write_size, 1, fp) < 1) {
+                    error_exit("[main] fwrite");
+                }
             }
+
             fclose(fp);
+            rpng_cleanup(&rpng_info);
 
         } catch (const Exception &ex) {
             std::cerr << ex.what() << std::endl;
-            exit(-3);
+            exit(-1);
         }
 
     } else {
         error_exit("[main] Wrong argv");
     }
 
-    return EXIT_SUCCESS;
+    return 0;
 }
