@@ -1,3 +1,5 @@
+#include <iomanip>
+
 #include <cryptopp/files.h>
 #include <cryptopp/hkdf.h>
 #include <cryptopp/modes.h>
@@ -94,6 +96,8 @@ inline size_t div_up(size_t x, size_t y) { return x / y + !!(x % y); }
 
 int main(int argc, char *argv[]) {
 
+    std::cout << std::setprecision(2);
+
     if (argc == 8 && strcmp(argv[1], "-k") == 0 && strcmp(argv[3], "-e") == 0 &&
         strcmp(argv[4], "-i") == 0 && strcmp(argv[6], "-o") == 0) {
         SecByteBlock key = read_key(argv[2]);
@@ -187,9 +191,11 @@ int main(int argc, char *argv[]) {
                 wpng_info.row_pointers[i] = buf.data() + i * width;
             }
 
+            size_t progress = 0;
             while (remaining && !fsource.SourceExhausted()) {
                 size_t req = STDMIN(remaining, read_size);
                 remaining -= req;
+                progress += req;
 
                 ArraySink as(buf.data(), req);
                 fsource.Detach(new Redirector(as));
@@ -209,7 +215,12 @@ int main(int argc, char *argv[]) {
                                                (req + HASH_SIZE));
                 }
                 wpng_encode_rows(&wpng_info, num_rows_w);
+
+                std::cout << "\rProcessed: " << std::fixed
+                          << (double)progress / file_size * 100;
             }
+            std::cout << std::endl;
+            std::cout << "Done" << std::endl;
 
             wpng_encode_finish(&wpng_info);
             wpng_cleanup(&wpng_info);
@@ -296,9 +307,11 @@ int main(int argc, char *argv[]) {
                 error_exit("[main] fopen");
             }
 
+            size_t progress = 0;
             while (remaining > 0) {
                 size_t req = STDMIN(remaining, read_size);
                 remaining -= req;
+                progress += req;
                 size_t write_size = req;
                 req = BLOCK_SIZE * div_up(req, BLOCK_SIZE);
 
@@ -318,7 +331,12 @@ int main(int argc, char *argv[]) {
                 if (fwrite(buf.data(), write_size, 1, fp) < 1) {
                     error_exit("[main] fwrite");
                 }
+
+                std::cout << "\rProcessed: " << std::fixed
+                          << (double)progress / file_size * 100;
             }
+            std::cout << std::endl;
+            std::cout << "Done" << std::endl;
 
             fclose(fp);
             rpng_cleanup(&rpng_info);
