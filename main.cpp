@@ -67,19 +67,6 @@ const unsigned int FILE_SIZE = 8;
 const unsigned int HKDF_SIZE =
     ENC_KEY_SIZE + IV_SIZE + TWEAK_SIZE + HASH_KEY_SIZE;
 
-SecByteBlock read_key(char *keyf) {
-    try {
-        SecByteBlock key(ENC_KEY_SIZE + HASH_KEY_SIZE);
-        FileSource fsource(keyf, false);
-        fsource.Attach(new ArraySink(key, key.size()));
-        fsource.Pump(key.size());
-        return key;
-    } catch (const Exception &ex) {
-        std::cerr << ex.what() << std::endl;
-        exit(-1);
-    }
-}
-
 size_t get_file_size(const FileSource &file) {
     std::istream *stream = const_cast<FileSource &>(file).GetStream();
 
@@ -88,6 +75,23 @@ size_t get_file_size(const FileSource &file) {
     stream->seekg(old);
 
     return static_cast<size_t>(end);
+}
+
+SecByteBlock read_key(char *keyf) {
+    try {
+        FileSource fsource(keyf, false);
+        if (get_file_size(fsource) != ENC_KEY_SIZE + HASH_KEY_SIZE) {
+            error_exit("[read_key] Wrong key file");
+        }
+
+        SecByteBlock key(ENC_KEY_SIZE + HASH_KEY_SIZE);
+        fsource.Attach(new ArraySink(key, key.size()));
+        fsource.Pump(key.size());
+        return key;
+    } catch (const Exception &ex) {
+        std::cerr << ex.what() << std::endl;
+        exit(-1);
+    }
 }
 
 inline size_t div_up(size_t x, size_t y) { return x / y + !!(x % y); }
