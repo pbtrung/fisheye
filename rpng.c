@@ -27,6 +27,7 @@ void rpng_init(rimg_info *rimg_ptr) {
         rpng_error_exit("rpng_init: setjmp\n");
     }
     png_init_io(png_ptr, rimg_ptr->infile);
+    // png_set_crc_action(png_ptr, PNG_CRC_QUIET_USE, PNG_CRC_QUIET_USE);
 
     png_read_info(png_ptr, info_ptr);
     rimg_ptr->width = png_get_image_width(png_ptr, info_ptr);
