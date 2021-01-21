@@ -113,7 +113,7 @@ int main(int argc, char *argv[]) {
                           NUM_BYTES) /
                      1.2);
             const size_t rowbytes = width * NUM_BYTES;
-            const size_t read_size = BLOCK_SIZE * rowbytes;
+            const size_t read_size = BLOCK_SIZE * width;
 
             size_t num_header_rows =
                 div_up(SALT_SIZE + BLOCK_SIZE + HASH_SIZE, rowbytes);
@@ -244,7 +244,7 @@ int main(int argc, char *argv[]) {
             }
             rpng_init(&rpng_info);
 
-            const size_t read_size = BLOCK_SIZE * rpng_info.rowbytes;
+            const size_t read_size = BLOCK_SIZE * rpng_info.width;
             size_t num_rows = div_up(read_size + HASH_SIZE, rpng_info.rowbytes);
             rpng_info.row_pointers =
                 (unsigned char **)malloc(sizeof(unsigned char *) * num_rows);
