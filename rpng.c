@@ -33,9 +33,10 @@ void rpng_init(rimg_info *rimg_ptr) {
     png_read_info(png_ptr, info_ptr);
     rimg_ptr->width = png_get_image_width(png_ptr, info_ptr);
     rimg_ptr->height = png_get_image_height(png_ptr, info_ptr);
+    rimg_ptr->rowbytes = png_get_rowbytes(png_ptr, info_ptr);
     int color_type = png_get_color_type(png_ptr, info_ptr);
     int bit_depth = png_get_bit_depth(png_ptr, info_ptr);
-    if (bit_depth != 8 || color_type != PNG_COLOR_TYPE_GRAY) {
+    if (bit_depth != 8 || color_type != PNG_COLOR_TYPE_RGBA) {
         rpng_error_exit("[rpng_init] File does not have needed format\n");
     }
 

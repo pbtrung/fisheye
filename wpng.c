@@ -33,7 +33,7 @@ void wpng_init(wimg_info *wimg_ptr) {
     png_set_filter(png_ptr, 0, PNG_FILTER_NONE);
 
     int bit_depth = 8;
-    int color_type = PNG_COLOR_TYPE_GRAY;
+    int color_type = PNG_COLOR_TYPE_RGBA;
 
     png_set_user_limits(png_ptr, 1 << 30, 1 << 30);
     png_set_IHDR(png_ptr, info_ptr, wimg_ptr->width, wimg_ptr->height,

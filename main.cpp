@@ -64,6 +64,7 @@ const unsigned int IV_SIZE = 128;
 const unsigned int ENC_KEY_SIZE = 128;
 const unsigned int BLOCK_SIZE = 128;
 const unsigned int FILE_SIZE = 8;
+const unsigned int NUM_BYTES = 4;
 const unsigned int HKDF_SIZE =
     ENC_KEY_SIZE + IV_SIZE + TWEAK_SIZE + HASH_KEY_SIZE;
 
@@ -108,21 +109,24 @@ int main(int argc, char *argv[]) {
             FileSource fsource(argv[5], false);
             size_t file_size = get_file_size(fsource);
             size_t width =
-                ceil(sqrt(SALT_SIZE + BLOCK_SIZE + HASH_SIZE + file_size) / 2);
-            const size_t read_size = BLOCK_SIZE * width;
+                ceil(sqrt((SALT_SIZE + BLOCK_SIZE + HASH_SIZE + file_size) /
+                          NUM_BYTES) /
+                     1.2);
+            const size_t rowbytes = width * NUM_BYTES;
+            const size_t read_size = BLOCK_SIZE * rowbytes;
 
             size_t num_header_rows =
-                div_up(SALT_SIZE + BLOCK_SIZE + HASH_SIZE, width);
-            std::vector<unsigned char> buf(num_header_rows * width);
+                div_up(SALT_SIZE + BLOCK_SIZE + HASH_SIZE, rowbytes);
+            std::vector<unsigned char> buf(num_header_rows * rowbytes);
 
             size_t height = num_header_rows;
             size_t remaining = file_size;
             while (remaining >= read_size) {
-                height += div_up(HASH_SIZE + read_size, width);
+                height += div_up(HASH_SIZE + read_size, rowbytes);
                 remaining -= read_size;
             }
             if (remaining != 0) {
-                height += div_up(HASH_SIZE + remaining, width);
+                height += div_up(HASH_SIZE + remaining, rowbytes);
             }
 
             SecByteBlock salt(SALT_SIZE);
@@ -169,7 +173,7 @@ int main(int argc, char *argv[]) {
             wpng_info.height = height;
             wpng_init(&wpng_info);
 
-            size_t num_rows = div_up(read_size + HASH_SIZE, width);
+            size_t num_rows = div_up(read_size + HASH_SIZE, rowbytes);
             wpng_info.row_pointers =
                 (unsigned char **)malloc(sizeof(unsigned char *) * num_rows);
             if (wpng_info.row_pointers == NULL) {
@@ -177,14 +181,14 @@ int main(int argc, char *argv[]) {
             }
 
             for (uint32_t i = 0; i < num_header_rows; ++i) {
-                wpng_info.row_pointers[i] = buf.data() + i * width;
+                wpng_info.row_pointers[i] = buf.data() + i * rowbytes;
             }
             wpng_encode_rows(&wpng_info, num_header_rows);
 
             remaining = file_size;
-            buf.resize(num_rows * width);
+            buf.resize(num_rows * rowbytes);
             for (uint32_t i = 0; i < num_rows; ++i) {
-                wpng_info.row_pointers[i] = buf.data() + i * width;
+                wpng_info.row_pointers[i] = buf.data() + i * rowbytes;
             }
 
             size_t progress = 0;
@@ -203,11 +207,11 @@ int main(int argc, char *argv[]) {
                 hmac.Update(buf.data(), req);
                 hmac.Final(hmac_hash);
 
-                size_t num_rows_w = div_up(req + HASH_SIZE, width);
+                size_t num_rows_w = div_up(req + HASH_SIZE, rowbytes);
                 std::memcpy(&buf[req], hmac_hash, HASH_SIZE);
-                if (num_rows_w * width > req + HASH_SIZE) {
+                if (num_rows_w * rowbytes > req + HASH_SIZE) {
                     OS_GenerateRandomBlock(false, &buf[req + HASH_SIZE],
-                                           num_rows_w * width -
+                                           num_rows_w * rowbytes -
                                                (req + HASH_SIZE));
                 }
                 wpng_encode_rows(&wpng_info, num_rows_w);
@@ -240,8 +244,8 @@ int main(int argc, char *argv[]) {
             }
             rpng_init(&rpng_info);
 
-            const size_t read_size = BLOCK_SIZE * rpng_info.width;
-            size_t num_rows = div_up(read_size + HASH_SIZE, rpng_info.width);
+            const size_t read_size = BLOCK_SIZE * rpng_info.rowbytes;
+            size_t num_rows = div_up(read_size + HASH_SIZE, rpng_info.rowbytes);
             rpng_info.row_pointers =
                 (unsigned char **)malloc(sizeof(unsigned char *) * num_rows);
             if (rpng_info.row_pointers == NULL) {
@@ -249,11 +253,12 @@ int main(int argc, char *argv[]) {
             }
 
             size_t num_header_rows =
-                div_up(SALT_SIZE + BLOCK_SIZE + HASH_SIZE, rpng_info.width);
-            std::vector<unsigned char> buf(num_header_rows * rpng_info.width);
+                div_up(SALT_SIZE + BLOCK_SIZE + HASH_SIZE, rpng_info.rowbytes);
+            std::vector<unsigned char> buf(num_header_rows *
+                                           rpng_info.rowbytes);
 
             for (uint32_t i = 0; i < num_header_rows; ++i) {
-                rpng_info.row_pointers[i] = buf.data() + i * rpng_info.width;
+                rpng_info.row_pointers[i] = buf.data() + i * rpng_info.rowbytes;
             }
             rpng_decode_rows(&rpng_info, num_header_rows);
 
@@ -289,9 +294,9 @@ int main(int argc, char *argv[]) {
             uint64_t file_size = u8_to_u64(&buf[SALT_SIZE]);
 
             size_t remaining = file_size;
-            buf.resize(num_rows * rpng_info.width);
+            buf.resize(num_rows * rpng_info.rowbytes);
             for (uint32_t i = 0; i < num_rows; ++i) {
-                rpng_info.row_pointers[i] = buf.data() + i * rpng_info.width;
+                rpng_info.row_pointers[i] = buf.data() + i * rpng_info.rowbytes;
             }
 
             FILE *fp = fopen(argv[7], "wb");
@@ -307,7 +312,7 @@ int main(int argc, char *argv[]) {
                 size_t write_size = req;
                 req = BLOCK_SIZE * div_up(req, BLOCK_SIZE);
 
-                size_t num_rows_w = div_up(req + HASH_SIZE, rpng_info.width);
+                size_t num_rows_w = div_up(req + HASH_SIZE, rpng_info.rowbytes);
                 rpng_decode_rows(&rpng_info, num_rows_w);
 
                 hmac.Update(buf.data(), req);

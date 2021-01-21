@@ -7,6 +7,7 @@
 typedef struct rimg_info {
     long width;
     long height;
+    long rowbytes;
     void *png_ptr;
     void *info_ptr;
     FILE *infile;
