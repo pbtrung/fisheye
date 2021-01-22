@@ -1,5 +1,6 @@
 #include <iomanip>
 
+#include <cryptopp/chacha.h>
 #include <cryptopp/files.h>
 #include <cryptopp/hkdf.h>
 #include <cryptopp/modes.h>
@@ -63,10 +64,12 @@ const unsigned int SALT_SIZE = 64;
 const unsigned int IV_SIZE = 128;
 const unsigned int ENC_KEY_SIZE = 128;
 const unsigned int BLOCK_SIZE = 128;
+const unsigned int X20_KEY_SIZE = 32;
+const unsigned int X20_IV_SIZE = 24;
 const unsigned int FILE_SIZE = 8;
 const unsigned int NUM_BYTES = 4;
-const unsigned int HKDF_SIZE =
-    ENC_KEY_SIZE + IV_SIZE + TWEAK_SIZE + HASH_KEY_SIZE;
+const unsigned int HKDF_SIZE = ENC_KEY_SIZE + IV_SIZE + TWEAK_SIZE +
+                               HASH_KEY_SIZE + X20_KEY_SIZE + X20_IV_SIZE;
 
 size_t get_file_size(const FileSource &file) {
     std::istream *stream = const_cast<FileSource &>(file).GetStream();
@@ -157,10 +160,19 @@ int main(int argc, char *argv[]) {
             hmac.Final(hmac_hash);
             std::memcpy(&buf[SALT_SIZE + BLOCK_SIZE], hmac_hash, HASH_SIZE);
 
+            XChaCha20::Encryption x20;
+            x20.SetKeyWithIV(
+                &hkdf_hash[ENC_KEY_SIZE + IV_SIZE + TWEAK_SIZE + HASH_KEY_SIZE],
+                X20_KEY_SIZE,
+                &hkdf_hash[ENC_KEY_SIZE + IV_SIZE + TWEAK_SIZE + HASH_KEY_SIZE +
+                           X20_KEY_SIZE],
+                X20_IV_SIZE);
+
             if (buf.size() > SALT_SIZE + BLOCK_SIZE + HASH_SIZE) {
-                OS_GenerateRandomBlock(
-                    false, &buf[SALT_SIZE + BLOCK_SIZE + HASH_SIZE],
-                    buf.size() - (SALT_SIZE + BLOCK_SIZE + HASH_SIZE));
+                x20.ProcessData(&buf[SALT_SIZE + BLOCK_SIZE + HASH_SIZE],
+                                &buf[SALT_SIZE + BLOCK_SIZE + HASH_SIZE],
+                                buf.size() -
+                                    (SALT_SIZE + BLOCK_SIZE + HASH_SIZE));
             }
 
             wimg_info wpng_info;
@@ -210,9 +222,9 @@ int main(int argc, char *argv[]) {
                 size_t num_rows_w = div_up(req + HASH_SIZE, rowbytes);
                 std::memcpy(&buf[req], hmac_hash, HASH_SIZE);
                 if (num_rows_w * rowbytes > req + HASH_SIZE) {
-                    OS_GenerateRandomBlock(false, &buf[req + HASH_SIZE],
-                                           num_rows_w * rowbytes -
-                                               (req + HASH_SIZE));
+                    x20.ProcessData(&buf[req + HASH_SIZE],
+                                    &buf[req + HASH_SIZE],
+                                    num_rows_w * rowbytes - (req + HASH_SIZE));
                 }
                 wpng_encode_rows(&wpng_info, num_rows_w);
 
