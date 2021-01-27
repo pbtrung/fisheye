@@ -1,5 +1,5 @@
-#include <iomanip>
 #include <fstream>
+#include <iomanip>
 
 #include <cryptopp/chacha.h>
 #include <cryptopp/hkdf.h>
@@ -290,9 +290,9 @@ void decrypt(char *keyf, char *outf, std::istream *stream) {
             rpng_info.row_pointers[i] = buf.data() + i * rpng_info.rowbytes;
         }
 
-        FILE *fp = fopen(outf, "wb");
-        if (fp == NULL) {
-            error_exit("[main] fopen");
+        std::fstream outfile(outf, std::ios::out | std::ios::binary);
+        if (!outfile.is_open()) {
+            error_exit("[main] outfile");
         }
 
         size_t progress = 0;
@@ -316,9 +316,7 @@ void decrypt(char *keyf, char *outf, std::istream *stream) {
             }
 
             dec.ProcessData(buf.data(), buf.data(), req);
-            if (fwrite(buf.data(), write_size, 1, fp) < 1) {
-                error_exit("[main] fwrite");
-            }
+            outfile.write((char *)buf.data(), write_size);
 
             std::cerr << "\rProcessed: " << std::fixed
                       << (double)progress / file_size * 100 << "%";
@@ -326,7 +324,7 @@ void decrypt(char *keyf, char *outf, std::istream *stream) {
         std::cerr << std::endl;
         std::cerr << "Done" << std::endl;
 
-        fclose(fp);
+        outfile.close();
         rpng_cleanup(&rpng_info);
 
     } catch (const Exception &ex) {
