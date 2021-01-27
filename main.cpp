@@ -366,7 +366,7 @@ int main(int argc, char *argv[]) {
     } else if (argc == 6 && strcmp(argv[1], "-k") == 0 &&
                strcmp(argv[3], "-d") == 0 && strcmp(argv[4], "-o") == 0) {
         std::istream &infile = std::cin;
-        decrypt(argv[2], argv[7], &infile);
+        decrypt(argv[2], argv[5], &infile);
 
     } else {
         error_exit("[main] Wrong argv");
