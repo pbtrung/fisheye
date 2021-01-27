@@ -102,8 +102,9 @@ extern "C" {
 #endif
 
 /*------   Version   ------*/
-#define LZ4_VERSION_MAJOR 1   /* for breaking interface changes  */
-#define LZ4_VERSION_MINOR 9   /* for new (non-breaking) interface capabilities \
+#define LZ4_VERSION_MAJOR 1 /* for breaking interface changes  */
+#define LZ4_VERSION_MINOR                                                      \
+    9                         /* for new (non-breaking) interface capabilities \
                                */
 #define LZ4_VERSION_RELEASE 3 /* for tweaks, bug-fixes, or development */
 
@@ -695,8 +696,9 @@ typedef struct {
  *  note : only use this definition in association with static linking !
  *  this definition is not API/ABI safe, and may change in future versions.
  */
-#define LZ4_STREAMSIZE 16416 /* static size, for inter-version compatibility   \
-                              */
+#define LZ4_STREAMSIZE                                                         \
+    16416 /* static size, for inter-version compatibility                      \
+           */
 #define LZ4_STREAMSIZE_VOIDP (LZ4_STREAMSIZE / sizeof(void *))
 union LZ4_stream_u {
     void *table[LZ4_STREAMSIZE_VOIDP];
@@ -780,18 +782,18 @@ LZ4LIB_API int LZ4_compress_withState(void *state, const char *source,
                                       char *dest, int inputSize);
 LZ4_DEPRECATED("use LZ4_compress_fast_extState() instead")
 LZ4LIB_API
-    int LZ4_compress_limitedOutput_withState(void *state, const char *source,
-                                             char *dest, int inputSize,
-                                             int maxOutputSize);
+int LZ4_compress_limitedOutput_withState(void *state, const char *source,
+                                         char *dest, int inputSize,
+                                         int maxOutputSize);
 LZ4_DEPRECATED("use LZ4_compress_fast_continue() instead")
 LZ4LIB_API
-    int LZ4_compress_continue(LZ4_stream_t *LZ4_streamPtr, const char *source,
-                              char *dest, int inputSize);
+int LZ4_compress_continue(LZ4_stream_t *LZ4_streamPtr, const char *source,
+                          char *dest, int inputSize);
 LZ4_DEPRECATED("use LZ4_compress_fast_continue() instead")
 LZ4LIB_API
-    int LZ4_compress_limitedOutput_continue(LZ4_stream_t *LZ4_streamPtr,
-                                            const char *source, char *dest,
-                                            int inputSize, int maxOutputSize);
+int LZ4_compress_limitedOutput_continue(LZ4_stream_t *LZ4_streamPtr,
+                                        const char *source, char *dest,
+                                        int inputSize, int maxOutputSize);
 
 /*! Obsolete decompression functions (since v1.8.0) */
 LZ4_DEPRECATED("use LZ4_decompress_fast() instead")
@@ -822,8 +824,8 @@ LZ4LIB_API char *LZ4_slideInputBuffer(void *state);
 /*! Obsolete streaming decoding functions (since v1.7.0) */
 LZ4_DEPRECATED("use LZ4_decompress_safe_usingDict() instead")
 LZ4LIB_API
-    int LZ4_decompress_safe_withPrefix64k(const char *src, char *dst,
-                                          int compressedSize, int maxDstSize);
+int LZ4_decompress_safe_withPrefix64k(const char *src, char *dst,
+                                      int compressedSize, int maxDstSize);
 LZ4_DEPRECATED("use LZ4_decompress_fast_usingDict() instead")
 LZ4LIB_API int LZ4_decompress_fast_withPrefix64k(const char *src, char *dst,
                                                  int originalSize);
