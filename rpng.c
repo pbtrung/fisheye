@@ -8,7 +8,12 @@ void rpng_error_exit(const char *msg) {
     exit(-1);
 }
 
-void rpng_init(rimg_info *rimg_ptr) {
+void read_stream(png_structp png_ptr, png_bytep buf, size_t len) {
+    std::istream *stream = (std::istream *)png_get_io_ptr(png_ptr);
+    stream->read((char *)buf, len);
+}
+
+void rpng_init(rimg_info *rimg_ptr, std::istream *stream) {
     png_structp png_ptr;
     png_infop info_ptr;
 
@@ -26,10 +31,9 @@ void rpng_init(rimg_info *rimg_ptr) {
     if (setjmp(rimg_ptr->jmpbuf)) {
         rpng_error_exit("rpng_init: setjmp\n");
     }
-    png_init_io(png_ptr, rimg_ptr->infile);
-    // png_set_crc_action(png_ptr, PNG_CRC_QUIET_USE, PNG_CRC_QUIET_USE);
 
     png_set_user_limits(png_ptr, 1 << 30, 1 << 30);
+    png_set_read_fn(png_ptr, reinterpret_cast<void *>(stream), read_stream);
     png_read_info(png_ptr, info_ptr);
     rimg_ptr->width = png_get_image_width(png_ptr, info_ptr);
     rimg_ptr->height = png_get_image_height(png_ptr, info_ptr);
@@ -64,11 +68,6 @@ void rpng_cleanup(rimg_info *rimg_ptr) {
 
     rimg_ptr->png_ptr = NULL;
     rimg_ptr->info_ptr = NULL;
-
-    if (rimg_ptr->infile) {
-        fclose(rimg_ptr->infile);
-        rimg_ptr->infile = NULL;
-    }
 
     if (rimg_ptr->row_pointers) {
         free(rimg_ptr->row_pointers);

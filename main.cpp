@@ -176,14 +176,16 @@ int main(int argc, char *argv[]) {
             }
 
             wimg_info wpng_info;
-            wpng_info.outfile = NULL;
             wpng_info.row_pointers = NULL;
-            if (!(wpng_info.outfile = fopen(argv[7], "wb"))) {
-                error_exit("[main] fopen");
+
+            std::fstream outfile(argv[7], std::ios::out | std::ios::binary);
+            if (!outfile.is_open()) {
+                error_exit("[main] outfile");
             }
+
             wpng_info.width = width;
             wpng_info.height = height;
-            wpng_init(&wpng_info);
+            wpng_init(&wpng_info, &outfile);
 
             size_t num_rows = div_up(read_size + HASH_SIZE, rowbytes);
             wpng_info.row_pointers =
@@ -235,6 +237,7 @@ int main(int argc, char *argv[]) {
             std::cout << "Done" << std::endl;
 
             wpng_encode_finish(&wpng_info);
+            outfile.close();
             wpng_cleanup(&wpng_info);
 
         } catch (const Exception &ex) {
@@ -249,12 +252,12 @@ int main(int argc, char *argv[]) {
 
         try {
             rimg_info rpng_info;
-            rpng_info.infile = NULL;
             rpng_info.row_pointers = NULL;
-            if (!(rpng_info.infile = fopen(argv[5], "rb"))) {
-                error_exit("[main] fopen");
+            std::fstream infile(argv[5], std::ios::in | std::ios::binary);
+            if (!infile.is_open()) {
+                error_exit("[main] infile");
             }
-            rpng_init(&rpng_info);
+            rpng_init(&rpng_info, &infile);
 
             const size_t read_size = BLOCK_SIZE * rpng_info.width;
             size_t num_rows = div_up(read_size + HASH_SIZE, rpng_info.rowbytes);
@@ -348,6 +351,7 @@ int main(int argc, char *argv[]) {
             std::cout << "Done" << std::endl;
 
             fclose(fp);
+            infile.close();
             rpng_cleanup(&rpng_info);
 
         } catch (const Exception &ex) {

@@ -2,13 +2,18 @@
 
 #include "wpng.h"
 
+void write_stream(png_structp png_ptr, png_bytep buf, size_t len) {
+    std::ostream *stream = (std::ostream *)png_get_io_ptr(png_ptr);
+    stream->write((char *)buf, len);
+}
+
 void wpng_error_exit(const char *msg) {
     fprintf(stderr, msg);
     fflush(stderr);
     exit(-1);
 }
 
-void wpng_init(wimg_info *wimg_ptr) {
+void wpng_init(wimg_info *wimg_ptr, std::ostream *stream) {
     png_structp png_ptr;
     png_infop info_ptr;
 
@@ -26,8 +31,6 @@ void wpng_init(wimg_info *wimg_ptr) {
         wpng_error_exit("wpng_init: setjmp\n");
     }
 
-    png_init_io(png_ptr, wimg_ptr->outfile);
-
     png_set_compression_level(png_ptr, 0);
     png_set_compression_strategy(png_ptr, 0);
     png_set_filter(png_ptr, 0, PNG_FILTER_NONE);
@@ -39,6 +42,8 @@ void wpng_init(wimg_info *wimg_ptr) {
     png_set_IHDR(png_ptr, info_ptr, wimg_ptr->width, wimg_ptr->height,
                  bit_depth, color_type, PNG_INTERLACE_NONE,
                  PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+    png_set_write_fn(png_ptr, reinterpret_cast<void *>(stream), write_stream,
+                     NULL);
     png_write_info(png_ptr, info_ptr);
 
     wimg_ptr->png_ptr = png_ptr;
@@ -76,11 +81,6 @@ void wpng_cleanup(wimg_info *wimg_ptr) {
 
     wimg_ptr->png_ptr = NULL;
     wimg_ptr->info_ptr = NULL;
-
-    if (wimg_ptr->outfile) {
-        fclose(wimg_ptr->outfile);
-        wimg_ptr->outfile = NULL;
-    }
 
     if (wimg_ptr->row_pointers) {
         free(wimg_ptr->row_pointers);

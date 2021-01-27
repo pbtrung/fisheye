@@ -11,8 +11,8 @@
 #define PNG_DEBUG 3
 #include <png.h>
 
-#include "tf1024.h"
 #include "lz4.h"
+#include "tf1024.h"
 
 void abort_(const char *s, ...) {
     va_list args;
@@ -31,8 +31,8 @@ unsigned char *read_png(char *file_name, uint32_t *width, uint32_t *height) {
         abort_("[read_png] File %s could not be opened for reading", file_name);
     }
     if (fread(header, 1, 8, fp) < 8) {
-	    abort_("[read_png] File %s could not be read", file_name);
-	}
+        abort_("[read_png] File %s could not be read", file_name);
+    }
     if (png_sig_cmp(header, 0, 8) != 0) {
         abort_("[read_png] File %s is not a PNG image", file_name);
     }
@@ -59,7 +59,8 @@ unsigned char *read_png(char *file_name, uint32_t *width, uint32_t *height) {
     *height = png_get_image_height(png_ptr, info_ptr);
     int color_type = png_get_color_type(png_ptr, info_ptr);
     int bit_depth = png_get_bit_depth(png_ptr, info_ptr);
-    if (bit_depth != 8 || color_type != PNG_COLOR_TYPE_GRAY || *width != *height) {
+    if (bit_depth != 8 || color_type != PNG_COLOR_TYPE_GRAY ||
+        *width != *height) {
         abort_("[read_png] File %s does not have needed format", file_name);
     }
 
@@ -93,11 +94,13 @@ unsigned char *read_png(char *file_name, uint32_t *width, uint32_t *height) {
     return data;
 }
 
-void write_png(char *file_name, unsigned char *data, uint32_t width, uint32_t height) {
+void write_png(char *file_name, unsigned char *data, uint32_t width,
+               uint32_t height) {
 
     FILE *fp = fopen(file_name, "wb");
     if (fp == NULL) {
-        abort_("[write_png] File %s could not be opened for writing", file_name);
+        abort_("[write_png] File %s could not be opened for writing",
+               file_name);
     }
 
     png_structp png_ptr;
@@ -165,26 +168,40 @@ void write_png(char *file_name, unsigned char *data, uint32_t width, uint32_t he
 #define HEADER_LENGTH (HMAC_LENGTH + SALT_LENGTH + HSALT_LENGTH)
 
 static inline void u64_to_u8(unsigned char out[8U], uint64_t x) {
-    out[0] = (unsigned char) (x & 0xff); x >>= 8;
-    out[1] = (unsigned char) (x & 0xff); x >>= 8;
-    out[2] = (unsigned char) (x & 0xff); x >>= 8;
-    out[3] = (unsigned char) (x & 0xff); x >>= 8;
-    out[4] = (unsigned char) (x & 0xff); x >>= 8;
-    out[5] = (unsigned char) (x & 0xff); x >>= 8;
-    out[6] = (unsigned char) (x & 0xff); x >>= 8;
-    out[7] = (unsigned char) (x & 0xff);
+    out[0] = (unsigned char)(x & 0xff);
+    x >>= 8;
+    out[1] = (unsigned char)(x & 0xff);
+    x >>= 8;
+    out[2] = (unsigned char)(x & 0xff);
+    x >>= 8;
+    out[3] = (unsigned char)(x & 0xff);
+    x >>= 8;
+    out[4] = (unsigned char)(x & 0xff);
+    x >>= 8;
+    out[5] = (unsigned char)(x & 0xff);
+    x >>= 8;
+    out[6] = (unsigned char)(x & 0xff);
+    x >>= 8;
+    out[7] = (unsigned char)(x & 0xff);
 }
 
 static inline uint64_t u8_to_u64(const unsigned char in[8U]) {
     uint64_t x;
 
-    x  = in[7]; x <<= 8;
-    x |= in[6]; x <<= 8;
-    x |= in[5]; x <<= 8;
-    x |= in[4]; x <<= 8;
-    x |= in[3]; x <<= 8;
-    x |= in[2]; x <<= 8;
-    x |= in[1]; x <<= 8;
+    x = in[7];
+    x <<= 8;
+    x |= in[6];
+    x <<= 8;
+    x |= in[5];
+    x <<= 8;
+    x |= in[4];
+    x <<= 8;
+    x |= in[3];
+    x <<= 8;
+    x |= in[2];
+    x <<= 8;
+    x |= in[1];
+    x <<= 8;
     x |= in[0];
 
     return x;
@@ -199,7 +216,8 @@ static void compute_hmac(unsigned char *hmac_key, size_t hmac_key_len,
     assert(*hash_len >= HMAC_LENGTH);
 
     gcry_mac_hd_t hd;
-    gcry_error_t err = gcry_mac_open(&hd, GCRY_MAC_HMAC_SHA3_512, GCRY_MAC_FLAG_SECURE, NULL);
+    gcry_error_t err =
+        gcry_mac_open(&hd, GCRY_MAC_HMAC_SHA3_512, GCRY_MAC_FLAG_SECURE, NULL);
     if (gcry_err_code(err) != GPG_ERR_NO_ERROR) {
         abort_("[compute_hmac] Error: gcry_mac_open");
     }
@@ -230,8 +248,9 @@ static void key_derive(char *pass, size_t pwd_len, unsigned char *salt,
     assert(key_len >= KEY_LENGTH);
     assert(salt_len >= SALT_LENGTH);
 
-    gcry_error_t err = gcry_kdf_derive(pass, pwd_len, GCRY_KDF_PBKDF2, GCRY_MD_SHA3_512, salt,
-                        			   salt_len, 42, key_len, enc_key);
+    gcry_error_t err =
+        gcry_kdf_derive(pass, pwd_len, GCRY_KDF_PBKDF2, GCRY_MD_SHA3_512, salt,
+                        salt_len, 42, key_len, enc_key);
     if (gcry_err_code(err) != GPG_ERR_NO_ERROR) {
         abort_("[key_derive] Error: gcry_kdf_derive");
     }
@@ -297,20 +316,24 @@ int main(int argc, char **argv) {
         if (compressed_buf == NULL) {
             abort_("[main] Unable to allocate memory");
         }
-        uint64_t compressed_size = LZ4_compress_default((char *)raw_file, (char *)compressed_buf, fsize, max_compressed_size);
+        uint64_t compressed_size =
+            LZ4_compress_default((char *)raw_file, (char *)compressed_buf,
+                                 fsize, max_compressed_size);
         if (compressed_size == 0) {
             abort_("[main] Error: LZ4_compress_default");
         }
         free(raw_file);
         raw_file = NULL;
 
-        size_t img_side = ceil(sqrt(HEADER_LENGTH + FILE_LENGTH + COMPRESSED_LENGTH + compressed_size));
+        size_t img_side = ceil(sqrt(HEADER_LENGTH + FILE_LENGTH +
+                                    COMPRESSED_LENGTH + compressed_size));
         size_t num_pixels = img_side * img_side;
         unsigned char *img_data = malloc(num_pixels);
         if (img_data == NULL) {
             abort_("[main] Unable to allocate memory");
         }
-        memcpy(&img_data[HEADER_LENGTH + FILE_LENGTH + COMPRESSED_LENGTH], compressed_buf, compressed_size);
+        memcpy(&img_data[HEADER_LENGTH + FILE_LENGTH + COMPRESSED_LENGTH],
+               compressed_buf, compressed_size);
         free(compressed_buf);
         compressed_buf = NULL;
 
@@ -324,13 +347,16 @@ int main(int argc, char **argv) {
         randombytes_buf(hsalt, HSALT_LENGTH);
         memcpy(&img_data[HMAC_LENGTH + SALT_LENGTH], hsalt, HSALT_LENGTH);
 
-        ctr(argv[2], pwd_len, salt, SALT_LENGTH, &img_data[HEADER_LENGTH], num_pixels - HEADER_LENGTH);
+        ctr(argv[2], pwd_len, salt, SALT_LENGTH, &img_data[HEADER_LENGTH],
+            num_pixels - HEADER_LENGTH);
 
         unsigned char hmac_key[HMAC_LENGTH * 3];
-        key_derive(argv[4], hpwd_len, hsalt, HSALT_LENGTH, hmac_key, HMAC_LENGTH * 3);
+        key_derive(argv[4], hpwd_len, hsalt, HSALT_LENGTH, hmac_key,
+                   HMAC_LENGTH * 3);
         memcpy(img_data, &hmac_key[HMAC_LENGTH * 2], HMAC_LENGTH);
         size_t hmac_len = HMAC_LENGTH;
-        compute_hmac(hmac_key, HMAC_LENGTH * 2, img_data, num_pixels, img_data, &hmac_len);
+        compute_hmac(hmac_key, HMAC_LENGTH * 2, img_data, num_pixels, img_data,
+                     &hmac_len);
 
         write_png(argv[8], img_data, img_side, img_side);
         free(img_data);
@@ -356,23 +382,29 @@ int main(int argc, char **argv) {
 
         size_t num_pixels = width * height;
         unsigned char hmac_key[HMAC_LENGTH * 3];
-        key_derive(argv[4], hpwd_len, hsalt, HSALT_LENGTH, hmac_key, HMAC_LENGTH * 3);
+        key_derive(argv[4], hpwd_len, hsalt, HSALT_LENGTH, hmac_key,
+                   HMAC_LENGTH * 3);
         memcpy(img_data, &hmac_key[HMAC_LENGTH * 2], HMAC_LENGTH);
         size_t hmac_len = HMAC_LENGTH;
-        compute_hmac(hmac_key, HMAC_LENGTH * 2, img_data, num_pixels, img_data, &hmac_len);
+        compute_hmac(hmac_key, HMAC_LENGTH * 2, img_data, num_pixels, img_data,
+                     &hmac_len);
         if (memcmp(hash_from_img, img_data, HMAC_LENGTH) != 0) {
             abort_("[main] Error: HMAC");
         }
 
-        ctr(argv[2], pwd_len, salt, SALT_LENGTH, &img_data[HEADER_LENGTH], num_pixels - HEADER_LENGTH);
+        ctr(argv[2], pwd_len, salt, SALT_LENGTH, &img_data[HEADER_LENGTH],
+            num_pixels - HEADER_LENGTH);
 
         uint64_t fsize = u8_to_u64(&img_data[HEADER_LENGTH]);
-        uint64_t compressed_size = u8_to_u64(&img_data[HEADER_LENGTH + FILE_LENGTH]);
+        uint64_t compressed_size =
+            u8_to_u64(&img_data[HEADER_LENGTH + FILE_LENGTH]);
         unsigned char *decompressed_buf = malloc(fsize);
         if (decompressed_buf == NULL) {
             abort_("[main] Unable to allocate memory");
         }
-        uint64_t decompressed_size = LZ4_decompress_safe((char *)&img_data[HEADER_LENGTH + FILE_LENGTH + COMPRESSED_LENGTH], (char *)decompressed_buf, compressed_size, fsize);
+        uint64_t decompressed_size = LZ4_decompress_safe(
+            (char *)&img_data[HEADER_LENGTH + FILE_LENGTH + COMPRESSED_LENGTH],
+            (char *)decompressed_buf, compressed_size, fsize);
         if (decompressed_size <= 0 || decompressed_size != fsize) {
             abort_("[main] Error: LZ4_decompress_safe");
         }
